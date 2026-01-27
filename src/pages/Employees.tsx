@@ -20,8 +20,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { mockEmployees } from '@/lib/mock-data';
-import { EmploymentType } from '@/types/hrms';
+import { Employee, EmploymentType } from '@/types/hrms';
 import { cn } from '@/lib/utils';
+import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog';
+import { EmployeeDetailSheet } from '@/components/employees/EmployeeDetailSheet';
+import { toast } from '@/hooks/use-toast';
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
   casual: 'Casual',
@@ -41,8 +44,12 @@ export default function Employees() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [employees, setEmployees] = useState(mockEmployees);
 
-  const filteredEmployees = mockEmployees.filter((employee) => {
+  const filteredEmployees = employees.filter((employee) => {
     const matchesSearch =
       `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -54,7 +61,41 @@ export default function Employees() {
     return matchesSearch && matchesDepartment && matchesStatus;
   });
 
-  const departments = [...new Set(mockEmployees.map((e) => e.department))];
+  const departments = [...new Set(employees.map((e) => e.department))];
+
+  const handleViewProfile = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setDetailSheetOpen(true);
+  };
+
+  const handleAddEmployee = (newEmployee: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    position: string;
+    department: string;
+    employmentType: string;
+    payRate: number;
+  }) => {
+    const employee: Employee = {
+      id: `emp-${Date.now()}`,
+      firstName: newEmployee.firstName,
+      lastName: newEmployee.lastName,
+      email: newEmployee.email,
+      phone: newEmployee.phone,
+      position: newEmployee.position,
+      department: newEmployee.department || 'General',
+      employmentType: newEmployee.employmentType as EmploymentType,
+      payRate: newEmployee.payRate,
+      startDate: new Date().toISOString(),
+      status: 'onboarding',
+      complianceStatus: 'pending',
+      documents: [],
+      certifications: [],
+    };
+    setEmployees([employee, ...employees]);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -71,7 +112,7 @@ export default function Employees() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button className="gradient-primary">
+          <Button className="gradient-primary" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Employee
           </Button>
@@ -96,7 +137,7 @@ export default function Employees() {
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover">
                 <SelectItem value="all">All Departments</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept} value={dept}>
@@ -109,7 +150,7 @@ export default function Employees() {
               <SelectTrigger className="w-full sm:w-36">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover">
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
@@ -123,7 +164,11 @@ export default function Employees() {
       {/* Employee Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredEmployees.map((employee) => (
-          <Card key={employee.id} className="card-interactive">
+          <Card 
+            key={employee.id} 
+            className="card-interactive cursor-pointer"
+            onClick={() => handleViewProfile(employee)}
+          >
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
@@ -151,17 +196,21 @@ export default function Employees() {
                   </div>
                 </div>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>View Profile</DropdownMenuItem>
-                    <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                    <DropdownMenuItem>View Documents</DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewProfile(employee); }}>
+                      View Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => e.stopPropagation()}>Edit Details</DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => e.stopPropagation()}>View Documents</DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                    <DropdownMenuItem className="text-destructive" onClick={(e) => e.stopPropagation()}>
+                      Deactivate
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -182,11 +231,27 @@ export default function Employees() {
               </div>
 
               <div className="mt-4 pt-4 border-t border-border flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `mailto:${employee.email}`;
+                  }}
+                >
                   <Mail className="h-4 w-4 mr-1" />
                   Email
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `tel:${employee.phone}`;
+                  }}
+                >
                   <Phone className="h-4 w-4 mr-1" />
                   Call
                 </Button>
@@ -203,6 +268,20 @@ export default function Employees() {
           </CardContent>
         </Card>
       )}
+
+      {/* Add Employee Dialog */}
+      <AddEmployeeDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        onAdd={handleAddEmployee}
+      />
+
+      {/* Employee Detail Sheet */}
+      <EmployeeDetailSheet
+        employee={selectedEmployee}
+        open={detailSheetOpen}
+        onOpenChange={setDetailSheetOpen}
+      />
     </div>
   );
 }
