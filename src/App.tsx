@@ -10,6 +10,7 @@ import Employees from "./pages/Employees";
 import Compliance from "./pages/Compliance";
 import Leave from "./pages/Leave";
 import Recruitment from "./pages/Recruitment";
+import Contracts from "./pages/Contracts";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -78,6 +79,14 @@ const App = () => (
                   <h1 className="text-2xl font-bold">Documents</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
+              </PageWithLayout>
+            }
+          />
+          <Route
+            path="/contracts"
+            element={
+              <PageWithLayout>
+                <Contracts />
               </PageWithLayout>
             }
           />

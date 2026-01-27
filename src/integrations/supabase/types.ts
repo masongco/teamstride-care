@@ -14,7 +14,154 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      contract_audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_name: string | null
+          contract_id: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_name?: string | null
+          contract_id: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_name?: string | null
+          contract_id?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_audit_log_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contracts: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          department: string | null
+          description: string | null
+          employee_email: string
+          employee_name: string
+          employment_type: string | null
+          expires_at: string | null
+          id: string
+          pay_rate: number | null
+          position: string
+          signed_at: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["contract_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          department?: string | null
+          description?: string | null
+          employee_email: string
+          employee_name: string
+          employment_type?: string | null
+          expires_at?: string | null
+          id?: string
+          pay_rate?: number | null
+          position: string
+          signed_at?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["contract_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          department?: string | null
+          description?: string | null
+          employee_email?: string
+          employee_name?: string
+          employment_type?: string | null
+          expires_at?: string | null
+          id?: string
+          pay_rate?: number | null
+          position?: string
+          signed_at?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["contract_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      signatures: {
+        Row: {
+          contract_id: string
+          id: string
+          ip_address: string | null
+          signature_data: string
+          signature_type: string
+          signed_at: string
+          signer_email: string
+          signer_name: string
+          user_agent: string | null
+        }
+        Insert: {
+          contract_id: string
+          id?: string
+          ip_address?: string | null
+          signature_data: string
+          signature_type?: string
+          signed_at?: string
+          signer_email: string
+          signer_name: string
+          user_agent?: string | null
+        }
+        Update: {
+          contract_id?: string
+          id?: string
+          ip_address?: string | null
+          signature_data?: string
+          signature_type?: string
+          signed_at?: string
+          signer_email?: string
+          signer_name?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signatures_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +170,12 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      contract_status:
+        | "draft"
+        | "pending_signature"
+        | "signed"
+        | "expired"
+        | "voided"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +302,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      contract_status: [
+        "draft",
+        "pending_signature",
+        "signed",
+        "expired",
+        "voided",
+      ],
+    },
   },
 } as const
