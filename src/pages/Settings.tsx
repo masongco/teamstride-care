@@ -41,8 +41,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign, LayoutGrid } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { SidebarSettingsTab } from '@/components/settings/SidebarSettingsTab';
 
 const ROLE_CONFIG: Record<AppRole, { label: string; icon: typeof Shield; variant: 'default' | 'secondary' | 'outline' }> = {
   admin: { label: 'Admin', icon: ShieldCheck, variant: 'default' },
@@ -324,6 +325,12 @@ export default function Settings() {
             <TabsTrigger value="roles" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               User Roles
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="navigation" className="flex items-center gap-2">
+              <LayoutGrid className="h-4 w-4" />
+              Navigation
             </TabsTrigger>
           )}
         </TabsList>
@@ -656,6 +663,13 @@ export default function Settings() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+        )}
+
+        {/* Navigation Tab - Admin only */}
+        {isAdmin && (
+          <TabsContent value="navigation">
+            <SidebarSettingsTab />
           </TabsContent>
         )}
       </Tabs>
