@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Upload, Plus } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Employee, EmploymentType } from '@/types/hrms';
+import { Employee, EmploymentType, Document } from '@/types/hrms';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -52,8 +52,70 @@ const employmentTypeColors: Record<EmploymentType, string> = {
 export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: EmployeeDetailSheetProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Employee>>({});
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!employee) return null;
+
+  const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Invalid File Type',
+        description: 'Please upload a PDF or image file (JPG, PNG)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast({
+        title: 'File Too Large',
+        description: 'Please upload a file smaller than 10MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploadingDocument(true);
+
+    // Create a new document entry (in a real app, this would upload to storage)
+    const newDocument: Document = {
+      id: `doc-${Date.now()}`,
+      name: file.name,
+      type: 'certificate',
+      uploadedAt: new Date().toISOString(),
+      url: URL.createObjectURL(file), // Temporary URL for demo
+    };
+
+    const updatedEmployee: Employee = {
+      ...employee,
+      documents: [...employee.documents, newDocument],
+    };
+
+    onUpdate?.(updatedEmployee);
+    setIsUploadingDocument(false);
+
+    toast({
+      title: 'Document Uploaded',
+      description: `${file.name} has been uploaded successfully.`,
+    });
+
+    // Reset the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
 
   // Calculate compliance percentage
   const totalCerts = employee.certifications.length;
@@ -418,10 +480,28 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
 
                 {/* Documents */}
                 <div className="space-y-3">
-                  <h3 className="font-semibold text-sm flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Documents ({employee.documents.length})
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Documents ({employee.documents.length})
+                    </h3>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleUploadClick}
+                      disabled={isUploadingDocument}
+                    >
+                      <Upload className="h-3 w-3 mr-1" />
+                      {isUploadingDocument ? 'Uploading...' : 'Upload'}
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={handleDocumentUpload}
+                    />
+                  </div>
                   {employee.documents.length > 0 ? (
                     <div className="space-y-2">
                       {employee.documents.map((doc) => (
@@ -437,7 +517,19 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No documents uploaded</p>
+                    <div className="text-center py-4 border-2 border-dashed border-muted rounded-lg">
+                      <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground mb-2">No documents uploaded</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleUploadClick}
+                        disabled={isUploadingDocument}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Document
+                      </Button>
+                    </div>
                   )}
                 </div>
 
