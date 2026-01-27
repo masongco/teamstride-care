@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSettings, Department, Position } from '@/hooks/useSettings';
+import { useSettings, Department, Position, AwardClassification, AwardClassificationInput } from '@/hooks/useSettings';
 import { useUserRole, useUserRolesManagement, AppRole, UserWithRole } from '@/hooks/useUserRole';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,7 +41,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const ROLE_CONFIG: Record<AppRole, { label: string; icon: typeof Shield; variant: 'default' | 'secondary' | 'outline' }> = {
@@ -54,6 +54,7 @@ export default function Settings() {
   const {
     departments,
     positions,
+    awardClassifications,
     loading,
     addDepartment,
     updateDepartment,
@@ -61,6 +62,9 @@ export default function Settings() {
     addPosition,
     updatePosition,
     deletePosition,
+    addAwardClassification,
+    updateAwardClassification,
+    deleteAwardClassification,
   } = useSettings();
 
   const { isAdmin, loading: roleLoading } = useUserRole();
@@ -90,6 +94,22 @@ export default function Settings() {
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>('employee');
   const [roleSubmitting, setRoleSubmitting] = useState(false);
+
+  // Award Classification state
+  const [awardDialogOpen, setAwardDialogOpen] = useState(false);
+  const [awardDeleteDialogOpen, setAwardDeleteDialogOpen] = useState(false);
+  const [editingAward, setEditingAward] = useState<AwardClassification | null>(null);
+  const [deletingAward, setDeletingAward] = useState<AwardClassification | null>(null);
+  const [awardName, setAwardName] = useState('');
+  const [awardDescription, setAwardDescription] = useState('');
+  const [awardBaseRate, setAwardBaseRate] = useState('');
+  const [awardSaturdayMult, setAwardSaturdayMult] = useState('1.5');
+  const [awardSundayMult, setAwardSundayMult] = useState('2.0');
+  const [awardPublicHolidayMult, setAwardPublicHolidayMult] = useState('2.5');
+  const [awardEveningMult, setAwardEveningMult] = useState('1.15');
+  const [awardNightMult, setAwardNightMult] = useState('1.25');
+  const [awardOvertimeMult, setAwardOvertimeMult] = useState('1.5');
+  const [awardSubmitting, setAwardSubmitting] = useState(false);
 
   // Department handlers
   const openDeptDialog = (department?: Department) => {
@@ -196,10 +216,77 @@ export default function Settings() {
     setRoleDialogOpen(false);
   };
 
+  // Award Classification handlers
+  const openAwardDialog = (award?: AwardClassification) => {
+    if (award) {
+      setEditingAward(award);
+      setAwardName(award.name);
+      setAwardDescription(award.description || '');
+      setAwardBaseRate(award.base_hourly_rate.toString());
+      setAwardSaturdayMult(award.saturday_multiplier.toString());
+      setAwardSundayMult(award.sunday_multiplier.toString());
+      setAwardPublicHolidayMult(award.public_holiday_multiplier.toString());
+      setAwardEveningMult(award.evening_multiplier.toString());
+      setAwardNightMult(award.night_multiplier.toString());
+      setAwardOvertimeMult(award.overtime_multiplier.toString());
+    } else {
+      setEditingAward(null);
+      setAwardName('');
+      setAwardDescription('');
+      setAwardBaseRate('');
+      setAwardSaturdayMult('1.5');
+      setAwardSundayMult('2.0');
+      setAwardPublicHolidayMult('2.5');
+      setAwardEveningMult('1.15');
+      setAwardNightMult('1.25');
+      setAwardOvertimeMult('1.5');
+    }
+    setAwardDialogOpen(true);
+  };
+
+  const handleAwardSubmit = async () => {
+    if (!awardName.trim() || !awardBaseRate) return;
+    
+    const input: AwardClassificationInput = {
+      name: awardName.trim(),
+      description: awardDescription.trim(),
+      base_hourly_rate: parseFloat(awardBaseRate),
+      saturday_multiplier: parseFloat(awardSaturdayMult),
+      sunday_multiplier: parseFloat(awardSundayMult),
+      public_holiday_multiplier: parseFloat(awardPublicHolidayMult),
+      evening_multiplier: parseFloat(awardEveningMult),
+      night_multiplier: parseFloat(awardNightMult),
+      overtime_multiplier: parseFloat(awardOvertimeMult),
+    };
+
+    setAwardSubmitting(true);
+    if (editingAward) {
+      await updateAwardClassification(editingAward.id, input);
+    } else {
+      await addAwardClassification(input);
+    }
+    setAwardSubmitting(false);
+    setAwardDialogOpen(false);
+  };
+
+  const handleAwardDelete = async () => {
+    if (!deletingAward) return;
+    await deleteAwardClassification(deletingAward.id);
+    setAwardDeleteDialogOpen(false);
+    setDeletingAward(null);
+  };
+
   const getDepartmentName = (departmentId: string | null) => {
     if (!departmentId) return null;
     const dept = departments.find(d => d.id === departmentId);
     return dept?.name || null;
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-AU', {
+      style: 'currency',
+      currency: 'AUD',
+    }).format(amount);
   };
 
   if (loading || roleLoading) {
@@ -215,12 +302,12 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground">
-          Manage your organization's departments, positions, and user roles
+          Manage your organization's departments, positions, award classifications, and user roles
         </p>
       </div>
 
       <Tabs defaultValue="departments" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="departments" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
             Departments
@@ -228,6 +315,10 @@ export default function Settings() {
           <TabsTrigger value="positions" className="flex items-center gap-2">
             <Briefcase className="h-4 w-4" />
             Positions
+          </TabsTrigger>
+          <TabsTrigger value="awards" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            Award Classifications
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="roles" className="flex items-center gap-2">
@@ -385,6 +476,110 @@ export default function Settings() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Award Classifications Tab */}
+        <TabsContent value="awards">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Award Classifications
+                </CardTitle>
+                <CardDescription>
+                  Configure pay rates and penalty multipliers for different award levels
+                </CardDescription>
+              </div>
+              <Button onClick={() => openAwardDialog()} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Classification
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {awardClassifications.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No award classifications yet</p>
+                  <p className="text-sm">Add your first award classification to configure pay rates</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Base Rate</TableHead>
+                        <TableHead>Sat</TableHead>
+                        <TableHead>Sun</TableHead>
+                        <TableHead>PH</TableHead>
+                        <TableHead>Eve</TableHead>
+                        <TableHead>Night</TableHead>
+                        <TableHead>OT</TableHead>
+                        <TableHead className="w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {awardClassifications.map((award) => (
+                        <TableRow key={award.id}>
+                          <TableCell className="font-medium">
+                            <div>
+                              {award.name}
+                              {award.description && (
+                                <p className="text-xs text-muted-foreground">{award.description}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono">
+                            {formatCurrency(award.base_hourly_rate)}/hr
+                          </TableCell>
+                          <TableCell className="font-mono text-muted-foreground">
+                            ×{award.saturday_multiplier}
+                          </TableCell>
+                          <TableCell className="font-mono text-muted-foreground">
+                            ×{award.sunday_multiplier}
+                          </TableCell>
+                          <TableCell className="font-mono text-muted-foreground">
+                            ×{award.public_holiday_multiplier}
+                          </TableCell>
+                          <TableCell className="font-mono text-muted-foreground">
+                            ×{award.evening_multiplier}
+                          </TableCell>
+                          <TableCell className="font-mono text-muted-foreground">
+                            ×{award.night_multiplier}
+                          </TableCell>
+                          <TableCell className="font-mono text-muted-foreground">
+                            ×{award.overtime_multiplier}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openAwardDialog(award)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDeletingAward(award);
+                                  setAwardDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -689,6 +884,176 @@ export default function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Award Classification Dialog */}
+      <Dialog open={awardDialogOpen} onOpenChange={setAwardDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingAward ? 'Edit Award Classification' : 'Add Award Classification'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingAward
+                ? 'Update the award classification details and pay rates'
+                : 'Enter the details for the new award classification'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="award-name">Name *</Label>
+                <Input
+                  id="award-name"
+                  value={awardName}
+                  onChange={(e) => setAwardName(e.target.value)}
+                  placeholder="e.g., Level 1 Support Worker"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="award-base-rate">Base Hourly Rate (AUD) *</Label>
+                <Input
+                  id="award-base-rate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={awardBaseRate}
+                  onChange={(e) => setAwardBaseRate(e.target.value)}
+                  placeholder="e.g., 28.50"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="award-description">Description</Label>
+              <Textarea
+                id="award-description"
+                value={awardDescription}
+                onChange={(e) => setAwardDescription(e.target.value)}
+                placeholder="Brief description of this award level..."
+                rows={2}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-base font-semibold">Penalty Rate Multipliers</Label>
+              <p className="text-sm text-muted-foreground">
+                These multipliers are applied to the base hourly rate for different work conditions
+              </p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="award-sat">Saturday</Label>
+                  <Input
+                    id="award-sat"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={awardSaturdayMult}
+                    onChange={(e) => setAwardSaturdayMult(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="award-sun">Sunday</Label>
+                  <Input
+                    id="award-sun"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={awardSundayMult}
+                    onChange={(e) => setAwardSundayMult(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="award-ph">Public Holiday</Label>
+                  <Input
+                    id="award-ph"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={awardPublicHolidayMult}
+                    onChange={(e) => setAwardPublicHolidayMult(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="award-eve">Evening</Label>
+                  <Input
+                    id="award-eve"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={awardEveningMult}
+                    onChange={(e) => setAwardEveningMult(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="award-night">Night</Label>
+                  <Input
+                    id="award-night"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={awardNightMult}
+                    onChange={(e) => setAwardNightMult(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="award-ot">Overtime</Label>
+                  <Input
+                    id="award-ot"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={awardOvertimeMult}
+                    onChange={(e) => setAwardOvertimeMult(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAwardDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAwardSubmit} 
+              disabled={!awardName.trim() || !awardBaseRate || awardSubmitting}
+            >
+              {awardSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : editingAward ? (
+                'Update'
+              ) : (
+                'Add'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Award Classification Delete Dialog */}
+      <AlertDialog open={awardDeleteDialogOpen} onOpenChange={setAwardDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Award Classification</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingAward?.name}"? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleAwardDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
