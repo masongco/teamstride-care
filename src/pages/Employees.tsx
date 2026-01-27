@@ -50,6 +50,9 @@ export default function Employees() {
   const [employees, setEmployees] = useState(mockEmployees);
 
   const filteredEmployees = employees.filter((employee) => {
+    // Always exclude inactive/deactivated employees from the employee section
+    if (employee.status === 'inactive') return false;
+    
     const matchesSearch =
       `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -172,7 +175,6 @@ export default function Employees() {
               <SelectContent className="bg-popover">
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="onboarding">Onboarding</SelectItem>
               </SelectContent>
             </Select>
