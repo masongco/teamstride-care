@@ -41,7 +41,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign, LayoutGrid, UserPlus, Search, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign, LayoutGrid, UserPlus, Search, X, Download } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { SidebarSettingsTab } from '@/components/settings/SidebarSettingsTab';
 import { CreateUserDialog } from '@/components/settings/CreateUserDialog';
@@ -650,10 +650,43 @@ export default function Settings() {
                     Create user accounts and manage roles. Open signup is disabled for security.
                   </CardDescription>
                 </div>
-                <Button onClick={() => setCreateUserDialogOpen(true)} size="sm">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Create User
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const csvContent = [
+                        ['Name', 'Email', 'Role', 'Joined Date'].join(','),
+                        ...filteredUsers.map(user => [
+                          `"${(user.display_name || '').replace(/"/g, '""')}"`,
+                          `"${user.email.replace(/"/g, '""')}"`,
+                          user.role,
+                          new Date(user.created_at).toLocaleDateString()
+                        ].join(','))
+                      ].join('\n');
+                      
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const link = document.createElement('a');
+                      link.href = URL.createObjectURL(blob);
+                      link.download = `users_export_${new Date().toISOString().split('T')[0]}.csv`;
+                      link.click();
+                      URL.revokeObjectURL(link.href);
+                      
+                      toast({
+                        title: 'Export Complete',
+                        description: `Exported ${filteredUsers.length} users to CSV`,
+                      });
+                    }}
+                    disabled={filteredUsers.length === 0}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button onClick={() => setCreateUserDialogOpen(true)} size="sm">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Create User
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {usersLoading ? (
