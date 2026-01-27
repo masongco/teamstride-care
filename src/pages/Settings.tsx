@@ -70,7 +70,7 @@ export default function Settings() {
   } = useSettings();
 
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { users, loading: usersLoading, updateUserRole, fetchUsersWithRoles } = useUserRolesManagement();
+  const { users, loading: usersLoading, updateUserRole, deleteUserRole, fetchUsersWithRoles } = useUserRolesManagement();
 
   // Department state
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
@@ -93,9 +93,12 @@ export default function Settings() {
 
   // User role state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const [userDeleteDialogOpen, setUserDeleteDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserWithRole | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>('employee');
   const [roleSubmitting, setRoleSubmitting] = useState(false);
+  const [userDeleteSubmitting, setUserDeleteSubmitting] = useState(false);
 
   // Award Classification state
   const [awardDialogOpen, setAwardDialogOpen] = useState(false);
@@ -219,6 +222,30 @@ export default function Settings() {
     
     setRoleSubmitting(false);
     setRoleDialogOpen(false);
+  };
+
+  const handleUserDelete = async () => {
+    if (!deletingUser) return;
+    
+    setUserDeleteSubmitting(true);
+    const result = await deleteUserRole(deletingUser.user_id);
+    
+    if (result.success) {
+      toast({
+        title: 'User Deleted',
+        description: `Successfully removed ${deletingUser.display_name || 'user'} from the system`,
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete user. You may not have admin permissions.',
+        variant: 'destructive',
+      });
+    }
+    
+    setUserDeleteSubmitting(false);
+    setUserDeleteDialogOpen(false);
+    setDeletingUser(null);
   };
 
   // Award Classification handlers
@@ -655,13 +682,25 @@ export default function Settings() {
                               {new Date(user.created_at).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openRoleDialog(user)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openRoleDialog(user)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setDeletingUser(user);
+                                    setUserDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -1072,6 +1111,36 @@ export default function Settings() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* User Delete Dialog */}
+      <AlertDialog open={userDeleteDialogOpen} onOpenChange={setUserDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingUser?.display_name || deletingUser?.email}"? 
+              This will remove their role and access to the system. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={userDeleteSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUserDelete}
+              disabled={userDeleteSubmitting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {userDeleteSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
