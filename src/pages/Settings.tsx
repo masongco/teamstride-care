@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSettings, Department, Position } from '@/hooks/useSettings';
+import { useUserRole, useUserRolesManagement, AppRole, UserWithRole } from '@/hooks/useUserRole';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +41,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+
+const ROLE_CONFIG: Record<AppRole, { label: string; icon: typeof Shield; variant: 'default' | 'secondary' | 'outline' }> = {
+  admin: { label: 'Admin', icon: ShieldCheck, variant: 'default' },
+  manager: { label: 'Manager', icon: Shield, variant: 'secondary' },
+  employee: { label: 'Employee', icon: User, variant: 'outline' },
+};
 
 export default function Settings() {
   const {
@@ -54,6 +62,9 @@ export default function Settings() {
     updatePosition,
     deletePosition,
   } = useSettings();
+
+  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { users, loading: usersLoading, updateUserRole } = useUserRolesManagement();
 
   // Department state
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
@@ -73,6 +84,12 @@ export default function Settings() {
   const [posDepartmentId, setPosDepartmentId] = useState<string>('');
   const [posDescription, setPosDescription] = useState('');
   const [posSubmitting, setPosSubmitting] = useState(false);
+
+  // User role state
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
+  const [selectedRole, setSelectedRole] = useState<AppRole>('employee');
+  const [roleSubmitting, setRoleSubmitting] = useState(false);
 
   // Department handlers
   const openDeptDialog = (department?: Department) => {
@@ -149,13 +166,43 @@ export default function Settings() {
     setDeletingPosition(null);
   };
 
+  // User role handlers
+  const openRoleDialog = (user: UserWithRole) => {
+    setEditingUser(user);
+    setSelectedRole(user.role);
+    setRoleDialogOpen(true);
+  };
+
+  const handleRoleSubmit = async () => {
+    if (!editingUser) return;
+    
+    setRoleSubmitting(true);
+    const result = await updateUserRole(editingUser.user_id, selectedRole);
+    
+    if (result.success) {
+      toast({
+        title: 'Role Updated',
+        description: `Successfully updated role to ${ROLE_CONFIG[selectedRole].label}`,
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: 'Failed to update user role. You may not have admin permissions.',
+        variant: 'destructive',
+      });
+    }
+    
+    setRoleSubmitting(false);
+    setRoleDialogOpen(false);
+  };
+
   const getDepartmentName = (departmentId: string | null) => {
     if (!departmentId) return null;
     const dept = departments.find(d => d.id === departmentId);
     return dept?.name || null;
   };
 
-  if (loading) {
+  if (loading || roleLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -168,7 +215,7 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground">
-          Manage your organization's departments and positions
+          Manage your organization's departments, positions, and user roles
         </p>
       </div>
 
@@ -182,6 +229,12 @@ export default function Settings() {
             <Briefcase className="h-4 w-4" />
             Positions
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="roles" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              User Roles
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Departments Tab */}
@@ -336,6 +389,80 @@ export default function Settings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* User Roles Tab - Admin Only */}
+        {isAdmin && (
+          <TabsContent value="roles">
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5" />
+                    User Roles
+                  </CardTitle>
+                  <CardDescription>
+                    Manage user roles and permissions. Only admins can access this section.
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {usersLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No users found</p>
+                    <p className="text-sm">Users will appear here after they sign up</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Joined</TableHead>
+                        <TableHead className="w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users.map((user) => {
+                        const roleConfig = ROLE_CONFIG[user.role];
+                        const RoleIcon = roleConfig.icon;
+                        return (
+                          <TableRow key={user.id}>
+                            <TableCell className="font-medium">
+                              {user.display_name || user.email}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={roleConfig.variant} className="flex items-center gap-1 w-fit">
+                                <RoleIcon className="h-3 w-3" />
+                                {roleConfig.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {new Date(user.created_at).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openRoleDialog(user)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Department Dialog */}
@@ -505,6 +632,63 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* User Role Dialog */}
+      <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User Role</DialogTitle>
+            <DialogDescription>
+              Change the role for {editingUser?.display_name || editingUser?.email}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={selectedRole} onValueChange={(val) => setSelectedRole(val as AppRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Admin - Full access to all features
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="manager">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Manager - Manage employees and operations
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="employee">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Employee - Basic access
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleRoleSubmit} disabled={roleSubmitting}>
+              {roleSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Update Role'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
