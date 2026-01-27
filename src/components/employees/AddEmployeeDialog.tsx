@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
+import { employeeSchema, type EmployeeFormData } from '@/lib/validation-schemas';
 
 interface AddEmployeeDialogProps {
   open: boolean;
@@ -35,51 +36,78 @@ interface AddEmployeeDialogProps {
   }) => void;
 }
 
+const initialFormData: EmployeeFormData = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  position: '',
+  department: '',
+  employmentType: 'casual',
+  payRate: '',
+};
+
 export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDialogProps) {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    position: '',
-    department: '',
-    employmentType: 'casual',
-    payRate: '',
-  });
+  const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
+  const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
+
+  const validateForm = (): boolean => {
+    const result = employeeSchema.safeParse(formData);
+    
+    if (!result.success) {
+      const fieldErrors: Partial<Record<keyof EmployeeFormData, string>> = {};
+      result.error.errors.forEach((err) => {
+        const field = err.path[0] as keyof EmployeeFormData;
+        if (!fieldErrors[field]) {
+          fieldErrors[field] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      return false;
+    }
+    
+    setErrors({});
+    return true;
+  };
 
   const handleSubmit = () => {
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.position) {
+    if (!validateForm()) {
       toast({
-        title: 'Missing Information',
-        description: 'Please fill in all required fields',
+        title: 'Validation Error',
+        description: 'Please fix the errors in the form',
         variant: 'destructive',
       });
       return;
     }
 
     onAdd({
-      ...formData,
-      payRate: parseFloat(formData.payRate) || 0,
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      email: formData.email.trim(),
+      phone: formData.phone?.trim() || '',
+      position: formData.position.trim(),
+      department: formData.department?.trim() || '',
+      employmentType: formData.employmentType,
+      payRate: formData.payRate ? parseFloat(formData.payRate) : 0,
     });
 
     // Reset form
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      position: '',
-      department: '',
-      employmentType: 'casual',
-      payRate: '',
-    });
-
+    setFormData(initialFormData);
+    setErrors({});
     onOpenChange(false);
     
     toast({
       title: 'Employee Added',
       description: `${formData.firstName} ${formData.lastName} has been added to the system.`,
     });
+  };
+
+  const handleFieldChange = (field: keyof EmployeeFormData, value: string) => {
+    setFormData({ ...formData, [field]: value });
+    // Clear error when field is modified
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: undefined });
+    }
   };
 
   return (
@@ -105,18 +133,28 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
                 <Input
                   id="firstName"
                   value={formData.firstName}
-                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  onChange={(e) => handleFieldChange('firstName', e.target.value)}
                   placeholder="John"
+                  className={errors.firstName ? 'border-destructive' : ''}
+                  maxLength={50}
                 />
+                {errors.firstName && (
+                  <p className="text-xs text-destructive">{errors.firstName}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name *</Label>
                 <Input
                   id="lastName"
                   value={formData.lastName}
-                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  onChange={(e) => handleFieldChange('lastName', e.target.value)}
                   placeholder="Smith"
+                  className={errors.lastName ? 'border-destructive' : ''}
+                  maxLength={50}
                 />
+                {errors.lastName && (
+                  <p className="text-xs text-destructive">{errors.lastName}</p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -126,18 +164,28 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => handleFieldChange('email', e.target.value)}
                   placeholder="john@example.com"
+                  className={errors.email ? 'border-destructive' : ''}
+                  maxLength={255}
                 />
+                {errors.email && (
+                  <p className="text-xs text-destructive">{errors.email}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
                 <Input
                   id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  value={formData.phone || ''}
+                  onChange={(e) => handleFieldChange('phone', e.target.value)}
                   placeholder="0400 000 000"
+                  className={errors.phone ? 'border-destructive' : ''}
+                  maxLength={20}
                 />
+                {errors.phone && (
+                  <p className="text-xs text-destructive">{errors.phone}</p>
+                )}
               </div>
             </div>
           </div>
@@ -153,18 +201,28 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
                 <Input
                   id="position"
                   value={formData.position}
-                  onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                  onChange={(e) => handleFieldChange('position', e.target.value)}
                   placeholder="Support Worker"
+                  className={errors.position ? 'border-destructive' : ''}
+                  maxLength={100}
                 />
+                {errors.position && (
+                  <p className="text-xs text-destructive">{errors.position}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="department">Department</Label>
                 <Input
                   id="department"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  value={formData.department || ''}
+                  onChange={(e) => handleFieldChange('department', e.target.value)}
                   placeholder="Disability Services"
+                  className={errors.department ? 'border-destructive' : ''}
+                  maxLength={100}
                 />
+                {errors.department && (
+                  <p className="text-xs text-destructive">{errors.department}</p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -172,7 +230,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
                 <Label htmlFor="employmentType">Employment Type</Label>
                 <Select
                   value={formData.employmentType}
-                  onValueChange={(v) => setFormData({ ...formData, employmentType: v })}
+                  onValueChange={(v) => handleFieldChange('employmentType', v as EmployeeFormData['employmentType'])}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -189,12 +247,16 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
                 <Label htmlFor="payRate">Pay Rate ($/hr)</Label>
                 <Input
                   id="payRate"
-                  type="number"
-                  step="0.01"
-                  value={formData.payRate}
-                  onChange={(e) => setFormData({ ...formData, payRate: e.target.value })}
+                  type="text"
+                  inputMode="decimal"
+                  value={formData.payRate || ''}
+                  onChange={(e) => handleFieldChange('payRate', e.target.value)}
                   placeholder="40.00"
+                  className={errors.payRate ? 'border-destructive' : ''}
                 />
+                {errors.payRate && (
+                  <p className="text-xs text-destructive">{errors.payRate}</p>
+                )}
               </div>
             </div>
           </div>
