@@ -41,9 +41,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign, LayoutGrid } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign, LayoutGrid, UserPlus } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { SidebarSettingsTab } from '@/components/settings/SidebarSettingsTab';
+import { CreateUserDialog } from '@/components/settings/CreateUserDialog';
 
 const ROLE_CONFIG: Record<AppRole, { label: string; icon: typeof Shield; variant: 'default' | 'secondary' | 'outline' }> = {
   admin: { label: 'Admin', icon: ShieldCheck, variant: 'default' },
@@ -69,7 +70,7 @@ export default function Settings() {
   } = useSettings();
 
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { users, loading: usersLoading, updateUserRole } = useUserRolesManagement();
+  const { users, loading: usersLoading, updateUserRole, fetchUsersWithRoles } = useUserRolesManagement();
 
   // Department state
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
@@ -111,6 +112,9 @@ export default function Settings() {
   const [awardNightMult, setAwardNightMult] = useState('1.25');
   const [awardOvertimeMult, setAwardOvertimeMult] = useState('1.5');
   const [awardSubmitting, setAwardSubmitting] = useState(false);
+
+  // Create User state
+  const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
 
   // Department handlers
   const openDeptDialog = (department?: Department) => {
@@ -596,16 +600,20 @@ export default function Settings() {
         {isAdmin && (
           <TabsContent value="roles">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <ShieldCheck className="h-5 w-5" />
-                    User Roles
+                    User Management
                   </CardTitle>
                   <CardDescription>
-                    Manage user roles and permissions. Only admins can access this section.
+                    Create user accounts and manage roles. Open signup is disabled for security.
                   </CardDescription>
                 </div>
+                <Button onClick={() => setCreateUserDialogOpen(true)} size="sm">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create User
+                </Button>
               </CardHeader>
               <CardContent>
                 {usersLoading ? (
@@ -1068,6 +1076,13 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create User Dialog */}
+      <CreateUserDialog
+        open={createUserDialogOpen}
+        onOpenChange={setCreateUserDialogOpen}
+        onUserCreated={fetchUsersWithRoles}
+      />
     </div>
   );
 }
