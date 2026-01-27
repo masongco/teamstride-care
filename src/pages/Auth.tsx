@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Users, Shield, Clock } from 'lucide-react';
 
@@ -191,124 +191,97 @@ export default function Auth() {
           </CardHeader>
           <CardContent>
             {isLogin ? (
-              <Form {...loginForm}>
-                <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
-                  <FormField
-                    control={loginForm.control}
-                    name="email"
-                    render={({ field: { ref, ...fieldProps } }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="email"
-                            placeholder="name@company.com"
-                            {...fieldProps}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+              <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="login-email">Email</Label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="name@company.com"
+                    value={loginForm.watch('email')}
+                    onChange={(e) => loginForm.setValue('email', e.target.value, { shouldValidate: true })}
                   />
-                  <FormField
-                    control={loginForm.control}
-                    name="password"
-                    render={({ field: { ref, ...fieldProps } }) => (
-                      <FormItem>
-                        <FormLabel>Password</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="password"
-                            placeholder="Enter your password"
-                            {...fieldProps}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                  {loginForm.formState.errors.email && (
+                    <p className="text-sm font-medium text-destructive">{loginForm.formState.errors.email.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Password</Label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={loginForm.watch('password')}
+                    onChange={(e) => loginForm.setValue('password', e.target.value, { shouldValidate: true })}
                   />
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      'Sign in'
-                    )}
-                  </Button>
-                </form>
-              </Form>
+                  {loginForm.formState.errors.password && (
+                    <p className="text-sm font-medium text-destructive">{loginForm.formState.errors.password.message}</p>
+                  )}
+                </div>
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    'Sign in'
+                  )}
+                </Button>
+              </form>
             ) : (
-              <Form {...signupForm}>
-                <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
-                  <FormField
-                    control={signupForm.control}
-                    name="displayName"
-                    render={({ field: { ref, ...fieldProps } }) => (
-                      <FormItem>
-                        <FormLabel>Display Name</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="John Doe"
-                            {...fieldProps}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+              <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-displayName">Display Name</Label>
+                  <Input
+                    id="signup-displayName"
+                    placeholder="John Doe"
+                    value={signupForm.watch('displayName')}
+                    onChange={(e) => signupForm.setValue('displayName', e.target.value, { shouldValidate: true })}
                   />
-                  <FormField
-                    control={signupForm.control}
-                    name="email"
-                    render={({ field: { ref, ...fieldProps } }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="email"
-                            placeholder="name@company.com"
-                            {...fieldProps}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                  {signupForm.formState.errors.displayName && (
+                    <p className="text-sm font-medium text-destructive">{signupForm.formState.errors.displayName.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-email">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="name@company.com"
+                    value={signupForm.watch('email')}
+                    onChange={(e) => signupForm.setValue('email', e.target.value, { shouldValidate: true })}
                   />
-                  <FormField
-                    control={signupForm.control}
-                    name="password"
-                    render={({ field: { ref, ...fieldProps } }) => (
-                      <FormItem>
-                        <FormLabel>Password</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="password"
-                            placeholder="Create a password"
-                            {...fieldProps}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                  {signupForm.formState.errors.email && (
+                    <p className="text-sm font-medium text-destructive">{signupForm.formState.errors.email.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Password</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    placeholder="Create a password"
+                    value={signupForm.watch('password')}
+                    onChange={(e) => signupForm.setValue('password', e.target.value, { shouldValidate: true })}
                   />
-                  <FormField
-                    control={signupForm.control}
-                    name="confirmPassword"
-                    render={({ field: { ref, ...fieldProps } }) => (
-                      <FormItem>
-                        <FormLabel>Confirm Password</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="password"
-                            placeholder="Confirm your password"
-                            {...fieldProps}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                  {signupForm.formState.errors.password && (
+                    <p className="text-sm font-medium text-destructive">{signupForm.formState.errors.password.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="signup-confirmPassword"
+                    type="password"
+                    placeholder="Confirm your password"
+                    value={signupForm.watch('confirmPassword')}
+                    onChange={(e) => signupForm.setValue('confirmPassword', e.target.value, { shouldValidate: true })}
                   />
+                  {signupForm.formState.errors.confirmPassword && (
+                    <p className="text-sm font-medium text-destructive">{signupForm.formState.errors.confirmPassword.message}</p>
+                  )}
+                </div>
                   <Button type="submit" className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? (
                       <>
@@ -320,7 +293,6 @@ export default function Auth() {
                     )}
                   </Button>
                 </form>
-              </Form>
             )}
 
             <div className="mt-6 text-center">
