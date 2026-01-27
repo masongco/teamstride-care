@@ -1,12 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   Users,
   ShieldCheck,
-  Calendar,
-  Clock,
   FileText,
   BarChart3,
   Settings,
@@ -19,33 +17,51 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useSidebarSettings } from '@/hooks/useSidebarSettings';
 
 interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   href: string;
+  moduleKey: string;
   badge?: number;
 }
 
-const mainNavItems: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
-  { label: 'Employees', icon: Users, href: '/employees' },
-  { label: 'Compliance', icon: ShieldCheck, href: '/compliance', badge: 3 },
-  { label: 'Recruitment', icon: UserPlus, href: '/recruitment' },
-  { label: 'Documents', icon: FileText, href: '/documents' },
-  { label: 'Contracts', icon: ClipboardList, href: '/contracts' },
-  { label: 'Payroll', icon: DollarSign, href: '/payroll' },
-  { label: 'Reports', icon: BarChart3, href: '/reports' },
+// All available nav items with their module keys
+const allNavItems: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, href: '/', moduleKey: 'dashboard' },
+  { label: 'Employees', icon: Users, href: '/employees', moduleKey: 'employees' },
+  { label: 'Compliance', icon: ShieldCheck, href: '/compliance', moduleKey: 'compliance', badge: 3 },
+  { label: 'Recruitment', icon: UserPlus, href: '/recruitment', moduleKey: 'recruitment' },
+  { label: 'Documents', icon: FileText, href: '/documents', moduleKey: 'documents' },
+  { label: 'Contracts', icon: ClipboardList, href: '/contracts', moduleKey: 'contracts' },
+  { label: 'Payroll', icon: DollarSign, href: '/payroll', moduleKey: 'payroll' },
+  { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports' },
 ];
 
 const bottomNavItems: NavItem[] = [
-  { label: 'Settings', icon: Settings, href: '/settings' },
-  { label: 'Help', icon: HelpCircle, href: '/help' },
+  { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings' },
+  { label: 'Help', icon: HelpCircle, href: '/help', moduleKey: 'help' },
 ];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { settings, loading, isModuleVisible } = useSidebarSettings();
+
+  // Filter nav items based on visibility settings
+  const visibleNavItems = allNavItems.filter(item => {
+    // If settings haven't loaded yet, show all items
+    if (loading || settings.length === 0) return true;
+    return isModuleVisible(item.moduleKey);
+  });
+
+  // Sort by display order from settings
+  const sortedNavItems = [...visibleNavItems].sort((a, b) => {
+    const settingA = settings.find(s => s.module_key === a.moduleKey);
+    const settingB = settings.find(s => s.module_key === b.moduleKey);
+    return (settingA?.display_order ?? 99) - (settingB?.display_order ?? 99);
+  });
 
   const NavLink = ({ item }: { item: NavItem }) => {
     const isActive = location.pathname === item.href;
@@ -117,7 +133,7 @@ export function Sidebar() {
 
       {/* Main Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {mainNavItems.map((item) => (
+        {sortedNavItems.map((item) => (
           <NavLink key={item.href} item={item} />
         ))}
       </nav>

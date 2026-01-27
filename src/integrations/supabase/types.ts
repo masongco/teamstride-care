@@ -249,6 +249,36 @@ export type Database = {
         }
         Relationships: []
       }
+      sidebar_settings: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          is_visible: boolean
+          module_key: string
+          module_label: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_visible?: boolean
+          module_key: string
+          module_label: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_visible?: boolean
+          module_key?: string
+          module_label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       signatures: {
         Row: {
           contract_id: string
