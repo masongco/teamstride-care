@@ -41,7 +41,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign, LayoutGrid, UserPlus } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign, LayoutGrid, UserPlus, Search, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { SidebarSettingsTab } from '@/components/settings/SidebarSettingsTab';
 import { CreateUserDialog } from '@/components/settings/CreateUserDialog';
@@ -118,6 +118,19 @@ export default function Settings() {
 
   // Create User state
   const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
+
+  // User search and filter state
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<AppRole | 'all'>('all');
+
+  // Filtered users
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch = userSearchQuery === '' || 
+      (user.display_name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+       user.email.toLowerCase().includes(userSearchQuery.toLowerCase()));
+    const matchesRole = userRoleFilter === 'all' || user.role === userRoleFilter;
+    return matchesSearch && matchesRole;
+  });
 
   // Department handlers
   const openDeptDialog = (department?: Department) => {
@@ -654,59 +667,111 @@ export default function Settings() {
                     <p className="text-sm">Users will appear here after they sign up</p>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Joined</TableHead>
-                        <TableHead className="w-[100px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => {
-                        const roleConfig = ROLE_CONFIG[user.role];
-                        const RoleIcon = roleConfig.icon;
-                        return (
-                          <TableRow key={user.id}>
-                            <TableCell className="font-medium">
-                              {user.display_name || user.email}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={roleConfig.variant} className="flex items-center gap-1 w-fit">
-                                <RoleIcon className="h-3 w-3" />
-                                {roleConfig.label}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {new Date(user.created_at).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openRoleDialog(user)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setDeletingUser(user);
-                                    setUserDeleteDialogOpen(true);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                  <>
+                    {/* Search and Filter Controls */}
+                    <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search by name or email..."
+                          value={userSearchQuery}
+                          onChange={(e) => setUserSearchQuery(e.target.value)}
+                          className="pl-9 pr-9"
+                        />
+                        {userSearchQuery && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                            onClick={() => setUserSearchQuery('')}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <Select
+                        value={userRoleFilter}
+                        onValueChange={(value) => setUserRoleFilter(value as AppRole | 'all')}
+                      >
+                        <SelectTrigger className="w-full sm:w-[180px]">
+                          <SelectValue placeholder="Filter by role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Roles</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="employee">Employee</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {filteredUsers.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No users match your search</p>
+                        <p className="text-sm">Try adjusting your search or filter criteria</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-sm text-muted-foreground mb-2">
+                          Showing {filteredUsers.length} of {users.length} users
+                        </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>User</TableHead>
+                              <TableHead>Role</TableHead>
+                              <TableHead>Joined</TableHead>
+                              <TableHead className="w-[100px]">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredUsers.map((user) => {
+                              const roleConfig = ROLE_CONFIG[user.role];
+                              const RoleIcon = roleConfig.icon;
+                              return (
+                                <TableRow key={user.id}>
+                                  <TableCell className="font-medium">
+                                    {user.display_name || user.email}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant={roleConfig.variant} className="flex items-center gap-1 w-fit">
+                                      <RoleIcon className="h-3 w-3" />
+                                      {roleConfig.label}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground">
+                                    {new Date(user.created_at).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => openRoleDialog(user)}
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setDeletingUser(user);
+                                          setUserDeleteDialogOpen(true);
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
