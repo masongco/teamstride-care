@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { toast } from '@/hooks/use-toast';
+import { contractSchema, type ContractFormData } from '@/lib/validation-schemas';
 
 interface CreateContractDialogProps {
   open: boolean;
@@ -62,47 +64,69 @@ TERMS OF EMPLOYMENT:
 
 By signing this agreement, both parties acknowledge and agree to the terms outlined above.`;
 
+const initialFormData: ContractFormData = {
+  title: '',
+  employee_name: '',
+  employee_email: '',
+  position: '',
+  department: '',
+  start_date: '',
+  pay_rate: '',
+  employment_type: 'casual',
+  content: defaultContractContent,
+};
+
 export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateContractDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    employee_name: '',
-    employee_email: '',
-    position: '',
-    department: '',
-    start_date: '',
-    pay_rate: '',
-    employment_type: 'casual',
-    content: defaultContractContent,
-  });
+  const [formData, setFormData] = useState<ContractFormData>(initialFormData);
+  const [errors, setErrors] = useState<Partial<Record<keyof ContractFormData, string>>>({});
+
+  const validateForm = (): boolean => {
+    const result = contractSchema.safeParse(formData);
+    
+    if (!result.success) {
+      const fieldErrors: Partial<Record<keyof ContractFormData, string>> = {};
+      result.error.errors.forEach((err) => {
+        const field = err.path[0] as keyof ContractFormData;
+        if (!fieldErrors[field]) {
+          fieldErrors[field] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      return false;
+    }
+    
+    setErrors({});
+    return true;
+  };
 
   const handleSubmit = async (asDraft: boolean) => {
+    if (!validateForm()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fix the errors in the form',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await onCreate({
-        title: formData.title || `Employment Contract - ${formData.employee_name}`,
-        content: formData.content,
-        employee_name: formData.employee_name,
-        employee_email: formData.employee_email,
-        position: formData.position,
-        department: formData.department || undefined,
+        title: formData.title?.trim() || `Employment Contract - ${formData.employee_name.trim()}`,
+        content: formData.content.trim(),
+        employee_name: formData.employee_name.trim(),
+        employee_email: formData.employee_email.trim(),
+        position: formData.position.trim(),
+        department: formData.department?.trim() || undefined,
         start_date: formData.start_date || undefined,
         pay_rate: formData.pay_rate ? parseFloat(formData.pay_rate) : undefined,
         employment_type: formData.employment_type,
       });
       onOpenChange(false);
       // Reset form
-      setFormData({
-        title: '',
-        employee_name: '',
-        employee_email: '',
-        position: '',
-        department: '',
-        start_date: '',
-        pay_rate: '',
-        employment_type: 'casual',
-        content: defaultContractContent,
-      });
+      setFormData(initialFormData);
+      setErrors({});
     } catch (error) {
       console.error('Failed to create contract:', error);
     } finally {
@@ -110,7 +134,13 @@ export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateCon
     }
   };
 
-  const isValid = formData.employee_name && formData.employee_email && formData.position && formData.content;
+  const handleFieldChange = (field: keyof ContractFormData, value: string) => {
+    setFormData({ ...formData, [field]: value });
+    // Clear error when field is modified
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: undefined });
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -135,9 +165,14 @@ export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateCon
                 <Input
                   id="employee_name"
                   value={formData.employee_name}
-                  onChange={(e) => setFormData({ ...formData, employee_name: e.target.value })}
+                  onChange={(e) => handleFieldChange('employee_name', e.target.value)}
                   placeholder="John Smith"
+                  className={errors.employee_name ? 'border-destructive' : ''}
+                  maxLength={100}
                 />
+                {errors.employee_name && (
+                  <p className="text-xs text-destructive">{errors.employee_name}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="employee_email">Employee Email *</Label>
@@ -145,9 +180,14 @@ export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateCon
                   id="employee_email"
                   type="email"
                   value={formData.employee_email}
-                  onChange={(e) => setFormData({ ...formData, employee_email: e.target.value })}
+                  onChange={(e) => handleFieldChange('employee_email', e.target.value)}
                   placeholder="john@example.com"
+                  className={errors.employee_email ? 'border-destructive' : ''}
+                  maxLength={255}
                 />
+                {errors.employee_email && (
+                  <p className="text-xs text-destructive">{errors.employee_email}</p>
+                )}
               </div>
             </div>
           </div>
@@ -163,24 +203,34 @@ export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateCon
                 <Input
                   id="position"
                   value={formData.position}
-                  onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                  onChange={(e) => handleFieldChange('position', e.target.value)}
                   placeholder="Support Worker"
+                  className={errors.position ? 'border-destructive' : ''}
+                  maxLength={100}
                 />
+                {errors.position && (
+                  <p className="text-xs text-destructive">{errors.position}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="department">Department</Label>
                 <Input
                   id="department"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  value={formData.department || ''}
+                  onChange={(e) => handleFieldChange('department', e.target.value)}
                   placeholder="Disability Services"
+                  className={errors.department ? 'border-destructive' : ''}
+                  maxLength={100}
                 />
+                {errors.department && (
+                  <p className="text-xs text-destructive">{errors.department}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="employment_type">Employment Type</Label>
                 <Select 
                   value={formData.employment_type} 
-                  onValueChange={(v) => setFormData({ ...formData, employment_type: v })}
+                  onValueChange={(v) => handleFieldChange('employment_type', v as ContractFormData['employment_type'])}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -197,30 +247,43 @@ export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateCon
                 <Label htmlFor="pay_rate">Pay Rate ($/hr)</Label>
                 <Input
                   id="pay_rate"
-                  type="number"
-                  step="0.01"
-                  value={formData.pay_rate}
-                  onChange={(e) => setFormData({ ...formData, pay_rate: e.target.value })}
+                  type="text"
+                  inputMode="decimal"
+                  value={formData.pay_rate || ''}
+                  onChange={(e) => handleFieldChange('pay_rate', e.target.value)}
                   placeholder="40.00"
+                  className={errors.pay_rate ? 'border-destructive' : ''}
                 />
+                {errors.pay_rate && (
+                  <p className="text-xs text-destructive">{errors.pay_rate}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="start_date">Start Date</Label>
                 <Input
                   id="start_date"
                   type="date"
-                  value={formData.start_date}
-                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  value={formData.start_date || ''}
+                  onChange={(e) => handleFieldChange('start_date', e.target.value)}
+                  className={errors.start_date ? 'border-destructive' : ''}
                 />
+                {errors.start_date && (
+                  <p className="text-xs text-destructive">{errors.start_date}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="title">Contract Title</Label>
                 <Input
                   id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  value={formData.title || ''}
+                  onChange={(e) => handleFieldChange('title', e.target.value)}
                   placeholder="Auto-generated if empty"
+                  className={errors.title ? 'border-destructive' : ''}
+                  maxLength={200}
                 />
+                {errors.title && (
+                  <p className="text-xs text-destructive">{errors.title}</p>
+                )}
               </div>
             </div>
           </div>
@@ -233,9 +296,16 @@ export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateCon
             <Textarea
               id="content"
               value={formData.content}
-              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-              className="min-h-[200px] font-mono text-xs"
+              onChange={(e) => handleFieldChange('content', e.target.value)}
+              className={`min-h-[200px] font-mono text-xs ${errors.content ? 'border-destructive' : ''}`}
+              maxLength={50000}
             />
+            {errors.content && (
+              <p className="text-xs text-destructive">{errors.content}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {formData.content.length.toLocaleString()} / 50,000 characters
+            </p>
           </div>
 
           {/* Actions */}
@@ -246,14 +316,14 @@ export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateCon
             <Button 
               variant="outline" 
               onClick={() => handleSubmit(true)}
-              disabled={!isValid || isSubmitting}
+              disabled={isSubmitting}
             >
               Save as Draft
             </Button>
             <Button 
               className="flex-1 gradient-primary"
               onClick={() => handleSubmit(false)}
-              disabled={!isValid || isSubmitting}
+              disabled={isSubmitting}
             >
               <Send className="h-4 w-4 mr-2" />
               Create & Send for Signature
