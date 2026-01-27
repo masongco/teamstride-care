@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      award_classifications: {
+        Row: {
+          base_hourly_rate: number
+          created_at: string
+          description: string | null
+          evening_multiplier: number | null
+          id: string
+          name: string
+          night_multiplier: number | null
+          overtime_multiplier: number | null
+          public_holiday_multiplier: number | null
+          saturday_multiplier: number | null
+          sunday_multiplier: number | null
+          updated_at: string
+        }
+        Insert: {
+          base_hourly_rate: number
+          created_at?: string
+          description?: string | null
+          evening_multiplier?: number | null
+          id?: string
+          name: string
+          night_multiplier?: number | null
+          overtime_multiplier?: number | null
+          public_holiday_multiplier?: number | null
+          saturday_multiplier?: number | null
+          sunday_multiplier?: number | null
+          updated_at?: string
+        }
+        Update: {
+          base_hourly_rate?: number
+          created_at?: string
+          description?: string | null
+          evening_multiplier?: number | null
+          id?: string
+          name?: string
+          night_multiplier?: number | null
+          overtime_multiplier?: number | null
+          public_holiday_multiplier?: number | null
+          saturday_multiplier?: number | null
+          sunday_multiplier?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       contract_audit_log: {
         Row: {
           action: string
