@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Upload, Plus } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Upload, Plus, AlertTriangle, CheckCircle, Pencil } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -23,10 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Employee, EmploymentType, Document } from '@/types/hrms';
-import { format } from 'date-fns';
+import { Employee, EmploymentType, Document, Certification, ComplianceStatus } from '@/types/hrms';
+import { format, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { CertificationDialog } from './CertificationDialog';
 
 interface EmployeeDetailSheetProps {
   employee: Employee | null;
@@ -53,9 +54,121 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Employee>>({});
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+  const [certDialogOpen, setCertDialogOpen] = useState(false);
+  const [selectedCertification, setSelectedCertification] = useState<Certification | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!employee) return null;
+
+  // Helper functions for certification management
+  const getExpiryInfo = (expiryDate: string) => {
+    const expiry = new Date(expiryDate);
+    const today = new Date();
+    const daysUntil = differenceInDays(expiry, today);
+    return { daysUntil, expiry };
+  };
+
+  const getStatusIcon = (status: ComplianceStatus) => {
+    switch (status) {
+      case 'expired':
+        return <AlertTriangle className="h-4 w-4 text-destructive" />;
+      case 'expiring':
+        return <Clock className="h-4 w-4 text-warning" />;
+      case 'compliant':
+        return <CheckCircle className="h-4 w-4 text-success" />;
+      case 'pending':
+        return <Clock className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  const handleAddCertification = () => {
+    setSelectedCertification(null);
+    setCertDialogOpen(true);
+  };
+
+  const handleEditCertification = (cert: Certification) => {
+    setSelectedCertification(cert);
+    setCertDialogOpen(true);
+  };
+
+  const handleSaveCertification = (certification: Certification, documentFile?: File) => {
+    let newDocuments = [...employee.documents];
+    
+    // If a document file was provided, add it to the documents list
+    if (documentFile) {
+      const newDocument: Document = {
+        id: `doc-${Date.now()}`,
+        name: documentFile.name,
+        type: 'certificate',
+        uploadedAt: new Date().toISOString(),
+        url: URL.createObjectURL(documentFile),
+      };
+      newDocuments = [...newDocuments, newDocument];
+      certification.documentId = newDocument.id;
+    }
+
+    // Update or add certification
+    const existingIndex = employee.certifications.findIndex(c => c.id === certification.id);
+    let newCertifications: Certification[];
+    
+    if (existingIndex >= 0) {
+      newCertifications = [...employee.certifications];
+      newCertifications[existingIndex] = certification;
+    } else {
+      newCertifications = [...employee.certifications, certification];
+    }
+
+    // Recalculate overall compliance status
+    const hasExpired = newCertifications.some(c => c.status === 'expired');
+    const hasExpiring = newCertifications.some(c => c.status === 'expiring');
+    const hasPending = newCertifications.some(c => c.status === 'pending');
+    
+    let overallStatus: ComplianceStatus = 'compliant';
+    if (hasExpired) overallStatus = 'expired';
+    else if (hasExpiring) overallStatus = 'expiring';
+    else if (hasPending) overallStatus = 'pending';
+
+    const updatedEmployee: Employee = {
+      ...employee,
+      certifications: newCertifications,
+      documents: newDocuments,
+      complianceStatus: overallStatus,
+    };
+
+    onUpdate?.(updatedEmployee);
+    
+    toast({
+      title: existingIndex >= 0 ? 'Certification Updated' : 'Certification Added',
+      description: `${certification.name} has been ${existingIndex >= 0 ? 'updated' : 'added'} successfully.`,
+    });
+  };
+
+  const handleDeleteCertification = (certificationId: string) => {
+    const newCertifications = employee.certifications.filter(c => c.id !== certificationId);
+    
+    // Recalculate overall compliance status
+    const hasExpired = newCertifications.some(c => c.status === 'expired');
+    const hasExpiring = newCertifications.some(c => c.status === 'expiring');
+    const hasPending = newCertifications.some(c => c.status === 'pending');
+    
+    let overallStatus: ComplianceStatus = 'compliant';
+    if (hasExpired) overallStatus = 'expired';
+    else if (hasExpiring) overallStatus = 'expiring';
+    else if (hasPending) overallStatus = 'pending';
+
+    const updatedEmployee: Employee = {
+      ...employee,
+      certifications: newCertifications,
+      complianceStatus: newCertifications.length === 0 ? 'pending' : overallStatus,
+    };
+
+    onUpdate?.(updatedEmployee);
+    
+    toast({
+      title: 'Certification Removed',
+      description: 'The certification has been removed.',
+    });
+  };
 
   const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -461,19 +574,85 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
                     </div>
                     <Progress value={compliancePercentage} className="h-2" />
                   </div>
-                  {employee.certifications.length > 0 && (
-                    <div className="space-y-2 mt-3">
+                  
+                  {/* Certifications Section */}
+                  <div className="space-y-2 mt-3">
+                    <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground font-medium">Certifications</p>
-                      <div className="space-y-2">
-                        {employee.certifications.map((cert) => (
-                          <div key={cert.id} className="flex items-center justify-between text-sm p-2 rounded-lg bg-muted/50">
-                            <span>{cert.name}</span>
-                            <StatusBadge status={cert.status} size="sm" />
-                          </div>
-                        ))}
-                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleAddCertification}
+                        className="h-7 text-xs"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add
+                      </Button>
                     </div>
-                  )}
+                    
+                    {employee.certifications.length > 0 ? (
+                      <div className="space-y-2">
+                        {employee.certifications.map((cert) => {
+                          const { daysUntil, expiry } = getExpiryInfo(cert.expiryDate);
+                          return (
+                            <div 
+                              key={cert.id} 
+                              className={cn(
+                                "p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors",
+                                cert.status === 'expired' && "border-destructive/50 bg-destructive/5",
+                                cert.status === 'expiring' && "border-warning/50 bg-warning/5",
+                                cert.status === 'compliant' && "border-success/50 bg-success/5",
+                                cert.status === 'pending' && "border-muted"
+                              )}
+                              onClick={() => handleEditCertification(cert)}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start gap-2 flex-1 min-w-0">
+                                  {getStatusIcon(cert.status)}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{cert.name}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {cert.status === 'pending' ? (
+                                        'Awaiting documentation'
+                                      ) : cert.status === 'expired' ? (
+                                        `Expired ${format(expiry, 'MMM d, yyyy')}`
+                                      ) : (
+                                        `Expires ${format(expiry, 'MMM d, yyyy')} (${daysUntil} days)`
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6 shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditCertification(cert);
+                                  }}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 border-2 border-dashed border-muted rounded-lg">
+                        <Shield className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground mb-2">No certifications added</p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleAddCertification}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add Certification
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <Separator />
@@ -582,6 +761,15 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
           )}
         </div>
       </SheetContent>
+
+      {/* Certification Dialog */}
+      <CertificationDialog
+        open={certDialogOpen}
+        onOpenChange={setCertDialogOpen}
+        certification={selectedCertification}
+        onSave={handleSaveCertification}
+        onDelete={handleDeleteCertification}
+      />
     </Sheet>
   );
 }
