@@ -41,6 +41,7 @@ export default function Auth() {
       email: '',
       password: '',
     },
+    mode: 'onChange',
   });
 
   const signupForm = useForm<SignupFormValues>({
@@ -51,6 +52,7 @@ export default function Auth() {
       password: '',
       confirmPassword: '',
     },
+    mode: 'onChange',
   });
 
   useEffect(() => {
