@@ -194,14 +194,14 @@ export default function Auth() {
                   <FormField
                     control={loginForm.control}
                     name="email"
-                    render={({ field }) => (
+                    render={({ field: { ref, ...fieldProps } }) => (
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
                           <Input
                             type="email"
                             placeholder="name@company.com"
-                            {...field}
+                            {...fieldProps}
                           />
                         </FormControl>
                         <FormMessage />
@@ -211,14 +211,14 @@ export default function Auth() {
                   <FormField
                     control={loginForm.control}
                     name="password"
-                    render={({ field }) => (
+                    render={({ field: { ref, ...fieldProps } }) => (
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
                           <Input
                             type="password"
                             placeholder="Enter your password"
-                            {...field}
+                            {...fieldProps}
                           />
                         </FormControl>
                         <FormMessage />
@@ -243,13 +243,13 @@ export default function Auth() {
                   <FormField
                     control={signupForm.control}
                     name="displayName"
-                    render={({ field }) => (
+                    render={({ field: { ref, ...fieldProps } }) => (
                       <FormItem>
                         <FormLabel>Display Name</FormLabel>
                         <FormControl>
                           <Input
                             placeholder="John Doe"
-                            {...field}
+                            {...fieldProps}
                           />
                         </FormControl>
                         <FormMessage />
@@ -259,14 +259,14 @@ export default function Auth() {
                   <FormField
                     control={signupForm.control}
                     name="email"
-                    render={({ field }) => (
+                    render={({ field: { ref, ...fieldProps } }) => (
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
                           <Input
                             type="email"
                             placeholder="name@company.com"
-                            {...field}
+                            {...fieldProps}
                           />
                         </FormControl>
                         <FormMessage />
@@ -276,14 +276,14 @@ export default function Auth() {
                   <FormField
                     control={signupForm.control}
                     name="password"
-                    render={({ field }) => (
+                    render={({ field: { ref, ...fieldProps } }) => (
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
                           <Input
                             type="password"
                             placeholder="Create a password"
-                            {...field}
+                            {...fieldProps}
                           />
                         </FormControl>
                         <FormMessage />
@@ -293,14 +293,14 @@ export default function Auth() {
                   <FormField
                     control={signupForm.control}
                     name="confirmPassword"
-                    render={({ field }) => (
+                    render={({ field: { ref, ...fieldProps } }) => (
                       <FormItem>
                         <FormLabel>Confirm Password</FormLabel>
                         <FormControl>
                           <Input
                             type="password"
                             placeholder="Confirm your password"
-                            {...field}
+                            {...fieldProps}
                           />
                         </FormControl>
                         <FormMessage />
