@@ -31,11 +31,9 @@ const mainNavItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
   { label: 'Employees', icon: Users, href: '/employees' },
   { label: 'Compliance', icon: ShieldCheck, href: '/compliance', badge: 3 },
-  { label: 'Leave', icon: Calendar, href: '/leave', badge: 2 },
-  { label: 'Timesheets', icon: Clock, href: '/timesheets' },
   { label: 'Recruitment', icon: UserPlus, href: '/recruitment' },
   { label: 'Documents', icon: FileText, href: '/documents' },
-  { label: 'Performance', icon: ClipboardList, href: '/performance' },
+  { label: 'Contracts', icon: ClipboardList, href: '/contracts' },
   { label: 'Payroll', icon: DollarSign, href: '/payroll' },
   { label: 'Reports', icon: BarChart3, href: '/reports' },
 ];
