@@ -75,6 +75,18 @@ export default function Employees() {
     setSelectedEmployee(updatedEmployee);
   };
 
+  const handleDeactivateEmployee = (employee: Employee) => {
+    const newStatus = employee.status === 'inactive' ? 'active' : 'inactive';
+    const updatedEmployee = { ...employee, status: newStatus as Employee['status'] };
+    setEmployees(employees.map(emp => 
+      emp.id === employee.id ? updatedEmployee : emp
+    ));
+    toast({
+      title: newStatus === 'inactive' ? 'Employee Deactivated' : 'Employee Activated',
+      description: `${employee.firstName} ${employee.lastName} has been ${newStatus === 'inactive' ? 'deactivated' : 'reactivated'}.`,
+    });
+  };
+
   const handleAddEmployee = (newEmployee: {
     firstName: string;
     lastName: string;
@@ -215,8 +227,11 @@ export default function Employees() {
                     <DropdownMenuItem onClick={(e) => e.stopPropagation()}>Edit Details</DropdownMenuItem>
                     <DropdownMenuItem onClick={(e) => e.stopPropagation()}>View Documents</DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive" onClick={(e) => e.stopPropagation()}>
-                      Deactivate
+                    <DropdownMenuItem 
+                      className={employee.status === 'inactive' ? 'text-success' : 'text-destructive'} 
+                      onClick={(e) => { e.stopPropagation(); handleDeactivateEmployee(employee); }}
+                    >
+                      {employee.status === 'inactive' ? 'Reactivate' : 'Deactivate'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
