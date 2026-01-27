@@ -68,6 +68,13 @@ export default function Employees() {
     setDetailSheetOpen(true);
   };
 
+  const handleUpdateEmployee = (updatedEmployee: Employee) => {
+    setEmployees(employees.map(emp => 
+      emp.id === updatedEmployee.id ? updatedEmployee : emp
+    ));
+    setSelectedEmployee(updatedEmployee);
+  };
+
   const handleAddEmployee = (newEmployee: {
     firstName: string;
     lastName: string;
@@ -281,6 +288,7 @@ export default function Employees() {
         employee={selectedEmployee}
         open={detailSheetOpen}
         onOpenChange={setDetailSheetOpen}
+        onUpdate={handleUpdateEmployee}
       />
     </div>
   );
