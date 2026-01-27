@@ -4,7 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import Compliance from "./pages/Compliance";
@@ -15,9 +17,11 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Wrapper for pages that need the AppLayout
-const PageWithLayout = ({ children }: { children: React.ReactNode }) => (
-  <AppLayout>{children}</AppLayout>
+// Wrapper for pages that need the AppLayout and authentication
+const ProtectedPageWithLayout = ({ children }: { children: React.ReactNode }) => (
+  <AuthGuard>
+    <AppLayout>{children}</AppLayout>
+  </AuthGuard>
 );
 
 const App = () => (
@@ -28,121 +32,122 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<Auth />} />
           <Route
             path="/employees"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <Employees />
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/compliance"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <Compliance />
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/leave"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <Leave />
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/timesheets"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold">Timesheets</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/recruitment"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <Recruitment />
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/documents"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold">Documents</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/contracts"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <Contracts />
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/performance"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold">Performance</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/payroll"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold">Payroll</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/reports"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold">Reports</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/settings"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold">Settings</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           <Route
             path="/help"
             element={
-              <PageWithLayout>
+              <ProtectedPageWithLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold">Help Center</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
-              </PageWithLayout>
+              </ProtectedPageWithLayout>
             }
           />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

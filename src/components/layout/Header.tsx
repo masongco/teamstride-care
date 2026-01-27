@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Bell, Search, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,12 +12,41 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/hooks/use-toast';
 
 interface HeaderProps {
   onMenuClick?: () => void;
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to log out. Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    toast({
+      title: 'Logged out',
+      description: 'You have been successfully logged out.',
+    });
+    navigate('/auth');
+  };
+
+  const displayName = user?.user_metadata?.display_name || user?.email || 'User';
+  const initials = displayName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border bg-card/80 backdrop-blur-sm">
       <div className="flex items-center justify-between h-full px-4 md:px-6">
@@ -86,9 +116,9 @@ export function Header({ onMenuClick }: HeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                 <Avatar className="h-9 w-9">
-                  <AvatarImage src="/avatars/admin.jpg" alt="Admin" />
+                  <AvatarImage src="/avatars/admin.jpg" alt={displayName} />
                   <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                    AD
+                    {initials}
                   </AvatarFallback>
                 </Avatar>
               </Button>
@@ -96,9 +126,9 @@ export function Header({ onMenuClick }: HeaderProps) {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
                 <div className="flex flex-col">
-                  <span>Admin User</span>
+                  <span>{displayName}</span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    admin@socialplus.com.au
+                    {user?.email || 'No email'}
                   </span>
                 </div>
               </DropdownMenuLabel>
@@ -106,7 +136,9 @@ export function Header({ onMenuClick }: HeaderProps) {
               <DropdownMenuItem>My Profile</DropdownMenuItem>
               <DropdownMenuItem>Account Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">Log out</DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
+                Log out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
