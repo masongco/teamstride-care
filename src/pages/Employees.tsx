@@ -60,7 +60,7 @@ export default function Employees() {
   const { isManager } = useUserRole();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('active');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
