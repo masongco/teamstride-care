@@ -20,6 +20,8 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
 import { employeeSchema, type EmployeeFormData } from '@/lib/validation-schemas';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AddEmployeeDialogProps {
   open: boolean;
@@ -50,6 +52,40 @@ const initialFormData: EmployeeFormData = {
 export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDialogProps) {
   const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
   const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
+
+  // Fetch departments from Supabase
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch positions from Supabase
+  const { data: positions = [] } = useQuery({
+    queryKey: ['positions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('positions')
+        .select('*, departments(name)')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Filter positions by selected department
+  const filteredPositions = formData.department
+    ? positions.filter(pos => {
+        const dept = departments.find(d => d.name === formData.department);
+        return dept ? pos.department_id === dept.id : true;
+      })
+    : positions;
 
   const validateForm = (): boolean => {
     const result = employeeSchema.safeParse(formData);
@@ -197,31 +233,53 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
             <h3 className="font-semibold text-sm">Employment Details</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="position">Position *</Label>
-                <Input
-                  id="position"
-                  value={formData.position}
-                  onChange={(e) => handleFieldChange('position', e.target.value)}
-                  placeholder="Support Worker"
-                  className={errors.position ? 'border-destructive' : ''}
-                  maxLength={100}
-                />
-                {errors.position && (
-                  <p className="text-xs text-destructive">{errors.position}</p>
+                <Label htmlFor="department">Department</Label>
+                <Select
+                  value={formData.department || 'none'}
+                  onValueChange={(val) => {
+                    handleFieldChange('department', val === 'none' ? '' : val);
+                    // Clear position when department changes
+                    if (formData.position) {
+                      handleFieldChange('position', '');
+                    }
+                  }}
+                >
+                  <SelectTrigger className={errors.department ? 'border-destructive' : ''}>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="none">No department</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.department && (
+                  <p className="text-xs text-destructive">{errors.department}</p>
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="department">Department</Label>
-                <Input
-                  id="department"
-                  value={formData.department || ''}
-                  onChange={(e) => handleFieldChange('department', e.target.value)}
-                  placeholder="Disability Services"
-                  className={errors.department ? 'border-destructive' : ''}
-                  maxLength={100}
-                />
-                {errors.department && (
-                  <p className="text-xs text-destructive">{errors.department}</p>
+                <Label htmlFor="position">Position *</Label>
+                <Select
+                  value={formData.position || 'none'}
+                  onValueChange={(val) => handleFieldChange('position', val === 'none' ? '' : val)}
+                >
+                  <SelectTrigger className={errors.position ? 'border-destructive' : ''}>
+                    <SelectValue placeholder="Select position" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="none">Select a position</SelectItem>
+                    {filteredPositions.map((pos) => (
+                      <SelectItem key={pos.id} value={pos.name}>
+                        {pos.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.position && (
+                  <p className="text-xs text-destructive">{errors.position}</p>
                 )}
               </div>
             </div>
