@@ -924,6 +924,125 @@ export type Database = {
         }
         Relationships: []
       }
+      organisation_entitlements: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          organisation_id: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          organisation_id: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          organisation_id?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organisation_entitlements_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organisation_subscriptions: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          id: string
+          organisation_id: string
+          plan_id: string
+          start_date: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          organisation_id: string
+          plan_id: string
+          start_date?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          organisation_id?: string
+          plan_id?: string
+          start_date?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organisation_subscriptions_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: true
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organisation_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organisations: {
+        Row: {
+          created_at: string
+          id: string
+          legal_name: string
+          logo_url: string | null
+          status: Database["public"]["Enums"]["org_status"]
+          timezone: string | null
+          trading_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          legal_name: string
+          logo_url?: string | null
+          status?: Database["public"]["Enums"]["org_status"]
+          timezone?: string | null
+          trading_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          legal_name?: string
+          logo_url?: string | null
+          status?: Database["public"]["Enums"]["org_status"]
+          timezone?: string | null
+          trading_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       performance_reviews: {
         Row: {
           areas_for_improvement: string | null
@@ -990,6 +1109,155 @@ export type Database = {
           status?: Database["public"]["Enums"]["review_status"]
           strengths?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      plan_entitlements: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          plan_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          plan_id: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          plan_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_entitlements_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      platform_audit_logs: {
+        Row: {
+          action: string
+          actor_platform_user_id: string | null
+          after_json: Json | null
+          before_json: Json | null
+          created_at: string
+          id: string
+          metadata_json: Json | null
+          organisation_id: string | null
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          actor_platform_user_id?: string | null
+          after_json?: Json | null
+          before_json?: Json | null
+          created_at?: string
+          id?: string
+          metadata_json?: Json | null
+          organisation_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor_platform_user_id?: string | null
+          after_json?: Json | null
+          before_json?: Json | null
+          created_at?: string
+          id?: string
+          metadata_json?: Json | null
+          organisation_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_audit_logs_actor_platform_user_id_fkey"
+            columns: ["actor_platform_user_id"]
+            isOneToOne: false
+            referencedRelation: "platform_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_audit_logs_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_users: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          last_login_at: string | null
+          mfa_enabled: boolean | null
+          name: string
+          role: Database["public"]["Enums"]["platform_role"]
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          last_login_at?: string | null
+          mfa_enabled?: boolean | null
+          name: string
+          role?: Database["public"]["Enums"]["platform_role"]
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          last_login_at?: string | null
+          mfa_enabled?: boolean | null
+          name?: string
+          role?: Database["public"]["Enums"]["platform_role"]
+          status?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -1452,6 +1720,57 @@ export type Database = {
         }
         Relationships: []
       }
+      support_sessions: {
+        Row: {
+          ended_at: string | null
+          expires_at: string
+          id: string
+          impersonated_tenant_user_id: string | null
+          organisation_id: string
+          platform_user_id: string
+          reason: string
+          started_at: string
+          status: Database["public"]["Enums"]["support_session_status"]
+        }
+        Insert: {
+          ended_at?: string | null
+          expires_at?: string
+          id?: string
+          impersonated_tenant_user_id?: string | null
+          organisation_id: string
+          platform_user_id: string
+          reason: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["support_session_status"]
+        }
+        Update: {
+          ended_at?: string | null
+          expires_at?: string
+          id?: string
+          impersonated_tenant_user_id?: string | null
+          organisation_id?: string
+          platform_user_id?: string
+          reason?: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["support_session_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_sessions_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_sessions_platform_user_id_fkey"
+            columns: ["platform_user_id"]
+            isOneToOne: false
+            referencedRelation: "platform_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_course_assignments: {
         Row: {
           assignment_id: string | null
@@ -1538,9 +1857,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_platform_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["platform_role"]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_platform_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["platform_role"]
+          _user_id: string
+        }
+        Returns: boolean
       }
       has_role: {
         Args: {
@@ -1549,6 +1879,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_platform_user: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "manager" | "employee"
@@ -1583,9 +1914,13 @@ export type Database = {
         | "procedure"
         | "training"
         | "other"
+      org_status: "trial" | "active" | "suspended" | "readonly"
+      platform_role: "owner" | "admin" | "support_readonly"
       recurrence_type: "none" | "annual" | "biannual" | "quarterly" | "monthly"
       review_status: "draft" | "in_progress" | "pending_approval" | "completed"
       review_type: "performance" | "annual" | "probation"
+      subscription_status: "active" | "cancelled" | "expired" | "past_due"
+      support_session_status: "active" | "ended" | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1749,9 +2084,13 @@ export const Constants = {
         "training",
         "other",
       ],
+      org_status: ["trial", "active", "suspended", "readonly"],
+      platform_role: ["owner", "admin", "support_readonly"],
       recurrence_type: ["none", "annual", "biannual", "quarterly", "monthly"],
       review_status: ["draft", "in_progress", "pending_approval", "completed"],
       review_type: ["performance", "annual", "probation"],
+      subscription_status: ["active", "cancelled", "expired", "past_due"],
+      support_session_status: ["active", "ended", "expired"],
     },
   },
 } as const
