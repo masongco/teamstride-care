@@ -204,6 +204,72 @@ export type Database = {
           },
         ]
       }
+      compliance_overrides: {
+        Row: {
+          blocked_certifications: Json
+          context_id: string | null
+          context_type: string
+          created_at: string
+          employee_id: string
+          expires_at: string
+          id: string
+          is_active: boolean
+          organisation_id: string
+          override_by: string
+          override_by_email: string
+          override_by_name: string
+          reason: string
+          updated_at: string
+        }
+        Insert: {
+          blocked_certifications?: Json
+          context_id?: string | null
+          context_type: string
+          created_at?: string
+          employee_id: string
+          expires_at: string
+          id?: string
+          is_active?: boolean
+          organisation_id: string
+          override_by: string
+          override_by_email: string
+          override_by_name: string
+          reason: string
+          updated_at?: string
+        }
+        Update: {
+          blocked_certifications?: Json
+          context_id?: string | null
+          context_type?: string
+          created_at?: string
+          employee_id?: string
+          expires_at?: string
+          id?: string
+          is_active?: boolean
+          organisation_id?: string
+          override_by?: string
+          override_by_email?: string
+          override_by_name?: string
+          reason?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_overrides_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_overrides_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       compliance_rules: {
         Row: {
           created_at: string
@@ -2152,6 +2218,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      expire_compliance_overrides: { Args: never; Returns: undefined }
       get_platform_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["platform_role"]
@@ -2160,6 +2227,10 @@ export type Database = {
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_active_compliance_override: {
+        Args: { _context_type?: string; _employee_id: string }
+        Returns: boolean
       }
       has_platform_role: {
         Args: {
@@ -2182,7 +2253,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "manager" | "employee"
+      app_role: "admin" | "manager" | "employee" | "director"
       assignment_status: "assigned" | "in_progress" | "completed" | "overdue"
       assignment_target_type:
         | "individual"
@@ -2356,7 +2427,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "manager", "employee"],
+      app_role: ["admin", "manager", "employee", "director"],
       assignment_status: ["assigned", "in_progress", "completed", "overdue"],
       assignment_target_type: [
         "individual",
