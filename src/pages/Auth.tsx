@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Users, Shield, Clock } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address' }),
@@ -32,6 +34,8 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const navigate = useNavigate();
   const { user, loading, signIn, signUp } = useAuth();
 
@@ -117,6 +121,39 @@ export default function Auth() {
       description: 'Welcome to SocialPlus HR. You are now logged in.',
     });
     navigate('/employees');
+  };
+
+  const handleForgotPassword = async () => {
+    const email = loginForm.watch('email');
+    
+    if (!email || !z.string().email().safeParse(email).success) {
+      toast({
+        title: 'Email required',
+        description: 'Please enter your email address first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsResettingPassword(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth`,
+    });
+    setIsResettingPassword(false);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    toast({
+      title: 'Password reset email sent',
+      description: 'Check your inbox for a link to reset your password.',
+    });
   };
 
   if (loading) {
@@ -217,6 +254,26 @@ export default function Auth() {
                   {loginForm.formState.errors.password && (
                     <p className="text-sm font-medium text-destructive">{loginForm.formState.errors.password.message}</p>
                   )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="remember-me" 
+                      checked={rememberMe}
+                      onCheckedChange={(checked) => setRememberMe(checked === true)}
+                    />
+                    <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
+                      Remember me
+                    </Label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={isResettingPassword}
+                    className="text-sm text-primary hover:underline disabled:opacity-50"
+                  >
+                    {isResettingPassword ? 'Sending...' : 'Forgot password?'}
+                  </button>
                 </div>
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? (
