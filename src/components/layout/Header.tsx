@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, Search, Menu } from 'lucide-react';
+import { Bell, Search, Menu, Check, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
+import { useNotifications } from '@/hooks/useNotifications';
 import { toast } from '@/hooks/use-toast';
+import { formatDistanceToNow } from 'date-fns';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -22,6 +24,7 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   const handleLogout = async () => {
     const { error } = await signOut();
@@ -78,36 +81,75 @@ export function Header({ onMenuClick }: HeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs bg-destructive border-0">
-                  3
-                </Badge>
+                {unreadCount > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs bg-destructive border-0">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Badge>
+                )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
+              <div className="flex items-center justify-between px-2">
+                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                {unreadCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      markAllAsRead();
+                    }}
+                  >
+                    <CheckCheck className="h-3 w-3 mr-1" />
+                    Mark all read
+                  </Button>
+                )}
+              </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer">
-                <span className="font-medium text-sm">Police Check Expired</span>
-                <span className="text-xs text-muted-foreground">
-                  David Williams - Police Check expired 35 days ago
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer">
-                <span className="font-medium text-sm">NDIS Screening Expiring</span>
-                <span className="text-xs text-muted-foreground">
-                  Michael Chen - Expires in 15 days
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer">
-                <span className="font-medium text-sm">Leave Request Pending</span>
-                <span className="text-xs text-muted-foreground">
-                  Sarah Mitchell - Annual leave request awaiting approval
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-center justify-center text-primary cursor-pointer">
-                View all notifications
-              </DropdownMenuItem>
+              {notifications.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  No notifications yet
+                </div>
+              ) : (
+                notifications.slice(0, 10).map((notification) => (
+                  <DropdownMenuItem
+                    key={notification.id}
+                    className={`flex flex-col items-start gap-1 cursor-pointer ${
+                      !notification.is_read ? 'bg-muted/50' : ''
+                    }`}
+                    onClick={() => {
+                      if (!notification.is_read) {
+                        markAsRead(notification.id);
+                      }
+                      if (notification.link) {
+                        navigate(notification.link);
+                      }
+                    }}
+                  >
+                    <div className="flex items-start justify-between w-full gap-2">
+                      <span className="font-medium text-sm">{notification.title}</span>
+                      {!notification.is_read && (
+                        <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground line-clamp-2">
+                      {notification.message}
+                    </span>
+                    <span className="text-xs text-muted-foreground/70">
+                      {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              )}
+              {notifications.length > 10 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-center justify-center text-primary cursor-pointer">
+                    View all notifications
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
