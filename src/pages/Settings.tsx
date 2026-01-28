@@ -920,12 +920,15 @@ export default function Settings() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pos-department">Department</Label>
-              <Select value={posDepartmentId} onValueChange={setPosDepartmentId}>
+              <Select 
+                value={posDepartmentId || 'none'} 
+                onValueChange={(val) => setPosDepartmentId(val === 'none' ? '' : val)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a department (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No department</SelectItem>
+                  <SelectItem value="none">No department</SelectItem>
                   {departments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}
