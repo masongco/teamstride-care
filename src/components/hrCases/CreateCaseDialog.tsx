@@ -140,19 +140,21 @@ export function CreateCaseDialog({ open, onOpenChange, onSubmit, organisationId 
           <div className="space-y-2">
             <Label htmlFor="employee_id">Employee Involved</Label>
             <Select
-              value={watch('employee_id') || ''}
-              onValueChange={(value) => setValue('employee_id', value || null)}
+              value={watch('employee_id') || '__none__'}
+              onValueChange={(value) => setValue('employee_id', value === '__none__' ? undefined : value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select employee (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No specific employee</SelectItem>
-                {employees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName}
-                  </SelectItem>
-                ))}
+                <SelectItem value="__none__">No specific employee</SelectItem>
+                {employees
+                  .filter((emp) => emp.id && emp.id.trim() !== '')
+                  .map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.firstName} {emp.lastName}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

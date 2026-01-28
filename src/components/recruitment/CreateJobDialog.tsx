@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CreateJobDialogProps {
   open?: boolean;
@@ -30,6 +32,19 @@ interface CreateJobDialogProps {
 export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialogProps) {
   const [requirements, setRequirements] = useState<string[]>([]);
   const [newRequirement, setNewRequirement] = useState('');
+
+  // Fetch departments from Supabase (same source as Settings)
+  const { data: departments = [], isLoading: loadingDepartments } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const addRequirement = () => {
     if (newRequirement.trim()) {
@@ -67,10 +82,21 @@ export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialog
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="disability">Disability Services</SelectItem>
-                  <SelectItem value="community">Community Support</SelectItem>
-                  <SelectItem value="operations">Operations</SelectItem>
-                  <SelectItem value="allied">Allied Health</SelectItem>
+                  {loadingDepartments ? (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  ) : departments.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      No departments configured
+                    </div>
+                  ) : (
+                    departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
