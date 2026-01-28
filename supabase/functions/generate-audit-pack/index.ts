@@ -589,7 +589,7 @@ async function generatePayrollPack(
   endDate: string,
   csvFiles: { name: string; content: string }[]
 ): Promise<Record<string, unknown>> {
-  // Build query
+  // Build timesheet query
   let timesheetsQuery = supabase
     .from('timesheets')
     .select('*, employees(first_name, last_name)')
@@ -625,22 +625,127 @@ async function generatePayrollPack(
     });
   }
 
+  // Leave Requests
+  let leaveQuery = supabase
+    .from('leave_requests')
+    .select('*, employees(first_name, last_name), leave_types(name)')
+    .eq('organisation_id', pack.organisation_id)
+    .gte('start_date', startDate)
+    .lte('end_date', endDate)
+    .order('start_date', { ascending: false });
+
+  if (pack.employee_id) {
+    leaveQuery = leaveQuery.eq('employee_id', pack.employee_id);
+  }
+
+  const { data: leaveRequests } = await leaveQuery;
+
+  if (leaveRequests && leaveRequests.length > 0) {
+    csvFiles.push({
+      name: 'leave_requests.csv',
+      // deno-lint-ignore no-explicit-any
+      content: arrayToCSV(leaveRequests.map((l: any) => {
+        const emp = l.employees as { first_name: string; last_name: string } | null;
+        const lt = l.leave_types as { name: string } | null;
+        return {
+          employee_name: emp ? `${emp.first_name} ${emp.last_name}` : 'Unknown',
+          leave_type: lt?.name || l.type || 'Unknown',
+          start_date: l.start_date,
+          end_date: l.end_date,
+          hours: l.hours,
+          status: l.status,
+          reason: l.reason,
+          approved_by: l.approved_by,
+          approved_at: l.approved_at,
+          override_reason: l.override_reason,
+          created_at: l.created_at,
+        };
+      })),
+    });
+  }
+
+  // Leave Balances (current snapshot)
+  let balancesQuery = supabase
+    .from('leave_balances')
+    .select('*, employees(first_name, last_name), leave_types(name)')
+    .eq('organisation_id', pack.organisation_id);
+
+  if (pack.employee_id) {
+    balancesQuery = balancesQuery.eq('employee_id', pack.employee_id);
+  }
+
+  const { data: leaveBalances } = await balancesQuery;
+
+  if (leaveBalances && leaveBalances.length > 0) {
+    csvFiles.push({
+      name: 'leave_balances_snapshot.csv',
+      // deno-lint-ignore no-explicit-any
+      content: arrayToCSV(leaveBalances.map((b: any) => {
+        const emp = b.employees as { first_name: string; last_name: string } | null;
+        const lt = b.leave_types as { name: string } | null;
+        return {
+          employee_name: emp ? `${emp.first_name} ${emp.last_name}` : 'Unknown',
+          leave_type: lt?.name || 'Unknown',
+          balance_hours: b.balance_hours,
+          last_accrual_at: b.last_accrual_at,
+          updated_at: b.updated_at,
+        };
+      })),
+    });
+  }
+
+  // Leave Adjustments in period
+  let adjustmentsQuery = supabase
+    .from('leave_adjustments')
+    .select('*, employees(first_name, last_name), leave_types(name)')
+    .eq('organisation_id', pack.organisation_id)
+    .gte('created_at', startDate)
+    .lte('created_at', endDate)
+    .order('created_at', { ascending: false });
+
+  if (pack.employee_id) {
+    adjustmentsQuery = adjustmentsQuery.eq('employee_id', pack.employee_id);
+  }
+
+  const { data: adjustments } = await adjustmentsQuery;
+
+  if (adjustments && adjustments.length > 0) {
+    csvFiles.push({
+      name: 'leave_adjustments.csv',
+      // deno-lint-ignore no-explicit-any
+      content: arrayToCSV(adjustments.map((a: any) => {
+        const emp = a.employees as { first_name: string; last_name: string } | null;
+        const lt = a.leave_types as { name: string } | null;
+        return {
+          employee_name: emp ? `${emp.first_name} ${emp.last_name}` : 'Unknown',
+          leave_type: lt?.name || 'Unknown',
+          adjustment_hours: a.adjustment_hours,
+          reason: a.reason,
+          adjusted_by_name: a.adjusted_by_name,
+          adjusted_by_email: a.adjusted_by_email,
+          created_at: a.created_at,
+        };
+      })),
+    });
+  }
+
   // Timesheet audit logs
   const { data: auditLogs } = await supabase
     .from('audit_logs')
     .select('*')
     .eq('organisation_id', pack.organisation_id)
-    .eq('entity_type', 'timesheet')
+    .in('entity_type', ['timesheet', 'leave_request'])
     .gte('created_at', startDate)
     .lte('created_at', endDate)
     .order('created_at', { ascending: false });
 
   if (auditLogs && auditLogs.length > 0) {
     csvFiles.push({
-      name: 'timesheet_audit_trail.csv',
+      name: 'payroll_audit_trail.csv',
       // deno-lint-ignore no-explicit-any
       content: arrayToCSV(auditLogs.map((l: any) => ({
         action: l.action,
+        entity_type: l.entity_type,
         entity_id: l.entity_id,
         user_name: l.user_name,
         user_email: l.user_email,
@@ -652,19 +757,26 @@ async function generatePayrollPack(
   }
 
   // deno-lint-ignore no-explicit-any
-  const approved = timesheets?.filter((t: any) => t.status === 'approved').length || 0;
+  const tsApproved = timesheets?.filter((t: any) => t.status === 'approved').length || 0;
   // deno-lint-ignore no-explicit-any
-  const pending = timesheets?.filter((t: any) => t.status === 'pending').length || 0;
+  const tsPending = timesheets?.filter((t: any) => t.status === 'pending').length || 0;
   // deno-lint-ignore no-explicit-any
-  const rejected = timesheets?.filter((t: any) => t.status === 'rejected').length || 0;
+  const leaveApproved = leaveRequests?.filter((l: any) => l.status === 'approved').length || 0;
+  // deno-lint-ignore no-explicit-any
+  const leavePending = leaveRequests?.filter((l: any) => l.status === 'pending').length || 0;
 
   return {
     total_timesheets: timesheets?.length || 0,
-    approved: approved,
-    pending: pending,
-    rejected: rejected,
+    timesheets_approved: tsApproved,
+    timesheets_pending: tsPending,
     // deno-lint-ignore no-explicit-any
-    total_hours: timesheets?.reduce((sum: number, t: any) => sum + (t.total_hours || 0), 0).toFixed(2),
+    total_timesheet_hours: timesheets?.reduce((sum: number, t: any) => sum + (t.total_hours || 0), 0).toFixed(2),
+    total_leave_requests: leaveRequests?.length || 0,
+    leave_approved: leaveApproved,
+    leave_pending: leavePending,
+    // deno-lint-ignore no-explicit-any
+    total_leave_hours: leaveRequests?.reduce((sum: number, l: any) => sum + (l.hours || 0), 0).toFixed(2),
+    leave_adjustments: adjustments?.length || 0,
     audit_entries: auditLogs?.length || 0,
   };
 }

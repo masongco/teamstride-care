@@ -1421,16 +1421,139 @@ export type Database = {
           },
         ]
       }
+      leave_adjustments: {
+        Row: {
+          adjusted_by_email: string | null
+          adjusted_by_name: string | null
+          adjusted_by_user_id: string
+          adjustment_hours: number
+          created_at: string
+          employee_id: string
+          id: string
+          leave_type_id: string
+          organisation_id: string
+          reason: string
+        }
+        Insert: {
+          adjusted_by_email?: string | null
+          adjusted_by_name?: string | null
+          adjusted_by_user_id: string
+          adjustment_hours: number
+          created_at?: string
+          employee_id: string
+          id?: string
+          leave_type_id: string
+          organisation_id: string
+          reason: string
+        }
+        Update: {
+          adjusted_by_email?: string | null
+          adjusted_by_name?: string | null
+          adjusted_by_user_id?: string
+          adjustment_hours?: number
+          created_at?: string
+          employee_id?: string
+          id?: string
+          leave_type_id?: string
+          organisation_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_adjustments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_adjustments_leave_type_id_fkey"
+            columns: ["leave_type_id"]
+            isOneToOne: false
+            referencedRelation: "leave_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_adjustments_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_balances: {
+        Row: {
+          balance_hours: number
+          created_at: string
+          employee_id: string
+          id: string
+          last_accrual_at: string | null
+          leave_type_id: string
+          organisation_id: string
+          updated_at: string
+        }
+        Insert: {
+          balance_hours?: number
+          created_at?: string
+          employee_id: string
+          id?: string
+          last_accrual_at?: string | null
+          leave_type_id: string
+          organisation_id: string
+          updated_at?: string
+        }
+        Update: {
+          balance_hours?: number
+          created_at?: string
+          employee_id?: string
+          id?: string
+          last_accrual_at?: string | null
+          leave_type_id?: string
+          organisation_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_balances_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_balances_leave_type_id_fkey"
+            columns: ["leave_type_id"]
+            isOneToOne: false
+            referencedRelation: "leave_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_balances_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leave_requests: {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          balance_deducted: boolean | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
           created_at: string
+          decided_at: string | null
+          decided_by_user_id: string | null
           employee_id: string
           end_date: string
           hours: number
           id: string
+          leave_type_id: string | null
           organisation_id: string
+          override_reason: string | null
           reason: string | null
           start_date: string
           status: string
@@ -1440,12 +1563,19 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          balance_deducted?: boolean | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
           created_at?: string
+          decided_at?: string | null
+          decided_by_user_id?: string | null
           employee_id: string
           end_date: string
           hours: number
           id?: string
+          leave_type_id?: string | null
           organisation_id: string
+          override_reason?: string | null
           reason?: string | null
           start_date: string
           status?: string
@@ -1455,12 +1585,19 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          balance_deducted?: boolean | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
           created_at?: string
+          decided_at?: string | null
+          decided_by_user_id?: string | null
           employee_id?: string
           end_date?: string
           hours?: number
           id?: string
+          leave_type_id?: string | null
           organisation_id?: string
+          override_reason?: string | null
           reason?: string | null
           start_date?: string
           status?: string
@@ -1476,7 +1613,79 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "leave_requests_leave_type_id_fkey"
+            columns: ["leave_type_id"]
+            isOneToOne: false
+            referencedRelation: "leave_types"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "leave_requests_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_types: {
+        Row: {
+          accrual_frequency:
+            | Database["public"]["Enums"]["accrual_frequency"]
+            | null
+          accrual_rate_hours: number | null
+          accrues: boolean
+          applicable_employment_types: string[] | null
+          created_at: string
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean
+          max_balance_hours: number | null
+          name: string
+          organisation_id: string
+          paid: boolean
+          updated_at: string
+        }
+        Insert: {
+          accrual_frequency?:
+            | Database["public"]["Enums"]["accrual_frequency"]
+            | null
+          accrual_rate_hours?: number | null
+          accrues?: boolean
+          applicable_employment_types?: string[] | null
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean
+          max_balance_hours?: number | null
+          name: string
+          organisation_id: string
+          paid?: boolean
+          updated_at?: string
+        }
+        Update: {
+          accrual_frequency?:
+            | Database["public"]["Enums"]["accrual_frequency"]
+            | null
+          accrual_rate_hours?: number | null
+          accrues?: boolean
+          applicable_employment_types?: string[] | null
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean
+          max_balance_hours?: number | null
+          name?: string
+          organisation_id?: string
+          paid?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_types_organisation_id_fkey"
             columns: ["organisation_id"]
             isOneToOne: false
             referencedRelation: "organisations"
@@ -2635,6 +2844,18 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      check_leave_balance: {
+        Args: {
+          _employee_id: string
+          _hours_requested: number
+          _leave_type_id: string
+        }
+        Returns: boolean
+      }
+      deduct_leave_balance: {
+        Args: { _employee_id: string; _hours: number; _leave_type_id: string }
+        Returns: boolean
+      }
       expire_audit_packs: { Args: never; Returns: undefined }
       expire_compliance_overrides: { Args: never; Returns: undefined }
       get_platform_role: {
@@ -2665,12 +2886,21 @@ export type Database = {
         Returns: boolean
       }
       is_platform_user: { Args: { _user_id: string }; Returns: boolean }
+      restore_leave_balance: {
+        Args: { _employee_id: string; _hours: number; _leave_type_id: string }
+        Returns: boolean
+      }
+      run_leave_accruals: {
+        Args: { _organisation_id: string }
+        Returns: number
+      }
       user_belongs_to_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
     }
     Enums: {
+      accrual_frequency: "weekly" | "fortnightly" | "monthly" | "annually"
       app_role: "admin" | "manager" | "employee" | "director"
       assignment_status: "assigned" | "in_progress" | "completed" | "overdue"
       assignment_target_type:
@@ -2885,6 +3115,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      accrual_frequency: ["weekly", "fortnightly", "monthly", "annually"],
       app_role: ["admin", "manager", "employee", "director"],
       assignment_status: ["assigned", "in_progress", "completed", "overdue"],
       assignment_target_type: [
