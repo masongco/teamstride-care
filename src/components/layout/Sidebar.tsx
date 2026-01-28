@@ -48,6 +48,7 @@ const allNavItems: NavItem[] = [
   { label: 'HR Cases', icon: AlertTriangle, href: '/hr-cases', moduleKey: 'hr-cases' },
   { label: 'LMS Admin', icon: BookOpen, href: '/lms', moduleKey: 'lms' },
   { label: 'Payroll', icon: DollarSign, href: '/payroll', moduleKey: 'payroll' },
+  { label: 'Payroll Export', icon: FileArchive, href: '/payroll-export', moduleKey: 'payroll-export' },
   { label: 'Audit & Exports', icon: FileArchive, href: '/audit-exports', moduleKey: 'audit-exports' },
   { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports' },
 ];

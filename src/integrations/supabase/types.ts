@@ -1956,6 +1956,178 @@ export type Database = {
         }
         Relationships: []
       }
+      pay_periods: {
+        Row: {
+          closed_at: string | null
+          closed_by_user_id: string | null
+          created_at: string
+          created_by_email: string | null
+          created_by_name: string | null
+          created_by_user_id: string
+          end_date: string
+          id: string
+          organisation_id: string
+          start_date: string
+          status: Database["public"]["Enums"]["pay_period_status"]
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by_user_id?: string | null
+          created_at?: string
+          created_by_email?: string | null
+          created_by_name?: string | null
+          created_by_user_id: string
+          end_date: string
+          id?: string
+          organisation_id: string
+          start_date: string
+          status?: Database["public"]["Enums"]["pay_period_status"]
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by_user_id?: string | null
+          created_at?: string
+          created_by_email?: string | null
+          created_by_name?: string | null
+          created_by_user_id?: string
+          end_date?: string
+          id?: string
+          organisation_id?: string
+          start_date?: string
+          status?: Database["public"]["Enums"]["pay_period_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pay_periods_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_exports: {
+        Row: {
+          created_at: string
+          created_by_email: string | null
+          created_by_name: string | null
+          created_by_user_id: string
+          file_urls: Json
+          id: string
+          organisation_id: string
+          pay_period_id: string
+          provider: Database["public"]["Enums"]["payroll_provider"]
+          status: Database["public"]["Enums"]["payroll_export_status"]
+          totals_summary: Json
+          updated_at: string
+          voided_at: string | null
+          voided_by_name: string | null
+          voided_by_user_id: string | null
+          voided_reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_email?: string | null
+          created_by_name?: string | null
+          created_by_user_id: string
+          file_urls?: Json
+          id?: string
+          organisation_id: string
+          pay_period_id: string
+          provider: Database["public"]["Enums"]["payroll_provider"]
+          status?: Database["public"]["Enums"]["payroll_export_status"]
+          totals_summary?: Json
+          updated_at?: string
+          voided_at?: string | null
+          voided_by_name?: string | null
+          voided_by_user_id?: string | null
+          voided_reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_email?: string | null
+          created_by_name?: string | null
+          created_by_user_id?: string
+          file_urls?: Json
+          id?: string
+          organisation_id?: string
+          pay_period_id?: string
+          provider?: Database["public"]["Enums"]["payroll_provider"]
+          status?: Database["public"]["Enums"]["payroll_export_status"]
+          totals_summary?: Json
+          updated_at?: string
+          voided_at?: string | null
+          voided_by_name?: string | null
+          voided_by_user_id?: string | null
+          voided_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_exports_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_exports_pay_period_id_fkey"
+            columns: ["pay_period_id"]
+            isOneToOne: false
+            referencedRelation: "pay_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_mappings: {
+        Row: {
+          applies_when: Json | null
+          created_at: string
+          description: string | null
+          earning_code: string
+          id: string
+          is_active: boolean
+          multiplier: number | null
+          organisation_id: string
+          shift_type: string
+          updated_at: string
+        }
+        Insert: {
+          applies_when?: Json | null
+          created_at?: string
+          description?: string | null
+          earning_code: string
+          id?: string
+          is_active?: boolean
+          multiplier?: number | null
+          organisation_id: string
+          shift_type: string
+          updated_at?: string
+        }
+        Update: {
+          applies_when?: Json | null
+          created_at?: string
+          description?: string | null
+          earning_code?: string
+          id?: string
+          is_active?: boolean
+          multiplier?: number | null
+          organisation_id?: string
+          shift_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_mappings_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       performance_reviews: {
         Row: {
           areas_for_improvement: string | null
@@ -2684,6 +2856,54 @@ export type Database = {
           },
         ]
       }
+      timesheet_unlock_log: {
+        Row: {
+          id: string
+          organisation_id: string
+          reason: string
+          timesheet_id: string
+          unlocked_at: string
+          unlocked_by_email: string | null
+          unlocked_by_name: string | null
+          unlocked_by_user_id: string
+        }
+        Insert: {
+          id?: string
+          organisation_id: string
+          reason: string
+          timesheet_id: string
+          unlocked_at?: string
+          unlocked_by_email?: string | null
+          unlocked_by_name?: string | null
+          unlocked_by_user_id: string
+        }
+        Update: {
+          id?: string
+          organisation_id?: string
+          reason?: string
+          timesheet_id?: string
+          unlocked_at?: string
+          unlocked_by_email?: string | null
+          unlocked_by_name?: string | null
+          unlocked_by_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheet_unlock_log_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_unlock_log_timesheet_id_fkey"
+            columns: ["timesheet_id"]
+            isOneToOne: false
+            referencedRelation: "timesheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       timesheets: {
         Row: {
           approved_at: string | null
@@ -2694,11 +2914,18 @@ export type Database = {
           created_at: string
           date: string
           employee_id: string
+          exported_at: string | null
+          exported_in_pay_period_id: string | null
           id: string
+          is_locked: boolean
+          locked_reason: string | null
           notes: string | null
           organisation_id: string
           status: string
           total_hours: number | null
+          unlocked_at: string | null
+          unlocked_by_user_id: string | null
+          unlocked_reason: string | null
           updated_at: string
         }
         Insert: {
@@ -2710,11 +2937,18 @@ export type Database = {
           created_at?: string
           date: string
           employee_id: string
+          exported_at?: string | null
+          exported_in_pay_period_id?: string | null
           id?: string
+          is_locked?: boolean
+          locked_reason?: string | null
           notes?: string | null
           organisation_id: string
           status?: string
           total_hours?: number | null
+          unlocked_at?: string | null
+          unlocked_by_user_id?: string | null
+          unlocked_reason?: string | null
           updated_at?: string
         }
         Update: {
@@ -2726,11 +2960,18 @@ export type Database = {
           created_at?: string
           date?: string
           employee_id?: string
+          exported_at?: string | null
+          exported_in_pay_period_id?: string | null
           id?: string
+          is_locked?: boolean
+          locked_reason?: string | null
           notes?: string | null
           organisation_id?: string
           status?: string
           total_hours?: number | null
+          unlocked_at?: string | null
+          unlocked_by_user_id?: string | null
+          unlocked_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2739,6 +2980,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheets_exported_in_pay_period_id_fkey"
+            columns: ["exported_in_pay_period_id"]
+            isOneToOne: false
+            referencedRelation: "pay_periods"
             referencedColumns: ["id"]
           },
           {
@@ -2844,6 +3092,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      can_edit_timesheet: { Args: { _timesheet_id: string }; Returns: boolean }
       check_leave_balance: {
         Args: {
           _employee_id: string
@@ -2886,6 +3135,10 @@ export type Database = {
         Returns: boolean
       }
       is_platform_user: { Args: { _user_id: string }; Returns: boolean }
+      lock_timesheets_for_export: {
+        Args: { _pay_period_id: string; _timesheet_ids: string[] }
+        Returns: number
+      }
       restore_leave_balance: {
         Args: { _employee_id: string; _hours: number; _leave_type_id: string }
         Returns: boolean
@@ -2893,6 +3146,16 @@ export type Database = {
       run_leave_accruals: {
         Args: { _organisation_id: string }
         Returns: number
+      }
+      unlock_timesheet: {
+        Args: {
+          _reason: string
+          _timesheet_id: string
+          _user_email: string
+          _user_id: string
+          _user_name: string
+        }
+        Returns: boolean
       }
       user_belongs_to_org: {
         Args: { _org_id: string; _user_id: string }
@@ -2982,6 +3245,9 @@ export type Database = {
         | "training"
         | "other"
       org_status: "trial" | "active" | "suspended" | "readonly"
+      pay_period_status: "open" | "exported" | "closed"
+      payroll_export_status: "generated" | "voided"
+      payroll_provider: "generic_csv" | "keypay" | "xero" | "myob"
       platform_role: "owner" | "admin" | "support_readonly"
       recurrence_type: "none" | "annual" | "biannual" | "quarterly" | "monthly"
       review_status: "draft" | "in_progress" | "pending_approval" | "completed"
@@ -3207,6 +3473,9 @@ export const Constants = {
         "other",
       ],
       org_status: ["trial", "active", "suspended", "readonly"],
+      pay_period_status: ["open", "exported", "closed"],
+      payroll_export_status: ["generated", "voided"],
+      payroll_provider: ["generic_csv", "keypay", "xero", "myob"],
       platform_role: ["owner", "admin", "support_readonly"],
       recurrence_type: ["none", "annual", "biannual", "quarterly", "monthly"],
       review_status: ["draft", "in_progress", "pending_approval", "completed"],

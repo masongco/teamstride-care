@@ -16,6 +16,7 @@ import Recruitment from "./pages/Recruitment";
 import Contracts from "./pages/Contracts";
 import Documents from "./pages/Documents";
 import Payroll from "./pages/Payroll";
+import PayrollExport from "./pages/PayrollExport";
 import Performance from "./pages/Performance";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -143,10 +144,10 @@ const App = () => (
             }
           />
           <Route
-            path="/payroll"
+            path="/payroll-export"
             element={
               <ProtectedPageWithLayout>
-                <Payroll />
+                <PayrollExport />
               </ProtectedPageWithLayout>
             }
           />
