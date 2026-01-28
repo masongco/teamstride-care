@@ -2,123 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Social Plus Support Work HRMS Design System */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* Social Plus Support Work HRMS Design System - Feb 2025 Rebrand */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    /* Brand Colors - Warm, Trustworthy Teal */
-    --primary: 166 84% 32%;
+    /* Social Plus Brand Colors - Primary Blues */
+    --primary: 205 65% 34%;           /* #1f628e - Primary brand blue */
     --primary-foreground: 0 0% 100%;
     
-    /* Secondary - Soft Sage */
-    --secondary: 150 20% 94%;
-    --secondary-foreground: 166 84% 25%;
+    /* Secondary - Deep Teal */
+    --secondary: 189 85% 27%;         /* #0c6980 - Secondary blue */
+    --secondary-foreground: 0 0% 100%;
     
-    /* Backgrounds */
-    --background: 150 20% 99%;
-    --foreground: 220 20% 20%;
-    
-    /* Cards & Surfaces */
-    --card: 0 0% 100%;
-    --card-foreground: 220 20% 20%;
-    
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 20%;
-    
-    /* Muted - Warm Gray */
-    --muted: 150 10% 95%;
-    --muted-foreground: 220 10% 45%;
-    
-    /* Accent - Amber for Actions */
-    --accent: 38 92% 50%;
+    /* Accent - Action Teal */
+    --accent: 180 100% 33%;           /* #00a8a8 - Accent/action colour */
     --accent-foreground: 0 0% 100%;
     
+    /* Backgrounds - Warm Cream */
+    --background: 45 100% 98%;        /* #fffdf5 - App background */
+    --foreground: 0 0% 0%;            /* #000000 - Primary text */
+    
+    /* Cards & Surfaces */
+    --card: 0 0% 100%;                /* #ffffff - Card surfaces */
+    --card-foreground: 0 0% 0%;       /* #000000 */
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    
+    /* Muted - Neutral Gray */
+    --muted: 200 12% 90%;             /* #e0e6e9 - Cards, dividers, table backgrounds */
+    --muted-foreground: 0 0% 35%;
+    
+    /* Light Accent - Info Panels */
+    --info: 186 90% 86%;              /* #c0f0f7 - Light accent */
+    --info-foreground: 189 85% 20%;
+    
     /* Status Colors */
-    --success: 152 69% 40%;
+    --success: 180 100% 33%;          /* Use accent teal for success */
     --success-foreground: 0 0% 100%;
     
     --warning: 38 92% 50%;
     --warning-foreground: 30 100% 15%;
     
-    --destructive: 0 72% 51%;
+    --destructive: 0 65% 45%;         /* Muted red for compliance */
     --destructive-foreground: 0 0% 100%;
     
-    /* Info */
-    --info: 199 89% 48%;
-    --info-foreground: 0 0% 100%;
-    
     /* Borders & Inputs */
-    --border: 150 15% 90%;
-    --input: 150 15% 90%;
-    --ring: 166 84% 32%;
+    --border: 200 12% 85%;
+    --input: 200 12% 85%;
+    --ring: 180 100% 33%;             /* Accent teal for focus */
     
-    --radius: 0.75rem;
+    --radius: 0.5rem;
     
-    /* Sidebar */
-    --sidebar-background: 166 50% 15%;
-    --sidebar-foreground: 150 20% 95%;
-    --sidebar-primary: 166 84% 50%;
+    /* Sidebar - Primary Blue */
+    --sidebar-background: 205 65% 34%;    /* #1f628e */
+    --sidebar-foreground: 0 0% 100%;      /* White text */
+    --sidebar-primary: 180 100% 33%;      /* #00a8a8 - Active highlight */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 166 40% 22%;
-    --sidebar-accent-foreground: 150 20% 95%;
-    --sidebar-border: 166 30% 25%;
-    --sidebar-ring: 166 84% 50%;
+    --sidebar-accent: 205 65% 28%;        /* Darker primary for hover */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 205 50% 40%;
+    --sidebar-ring: 180 100% 33%;
     
     /* Chart Colors */
-    --chart-1: 166 84% 40%;
-    --chart-2: 199 89% 48%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 152 69% 40%;
-    --chart-5: 0 72% 51%;
+    --chart-1: 205 65% 34%;           /* Primary blue */
+    --chart-2: 189 85% 27%;           /* Secondary */
+    --chart-3: 180 100% 33%;          /* Accent */
+    --chart-4: 186 90% 70%;           /* Light accent */
+    --chart-5: 38 92% 50%;            /* Warning */
   }
 
   .dark {
-    --primary: 166 84% 50%;
-    --primary-foreground: 166 50% 10%;
+    /* Dark mode - Maintain brand consistency */
+    --primary: 205 65% 45%;
+    --primary-foreground: 0 0% 100%;
     
-    --secondary: 166 30% 18%;
-    --secondary-foreground: 150 20% 95%;
+    --secondary: 189 85% 35%;
+    --secondary-foreground: 0 0% 100%;
     
-    --background: 220 20% 10%;
-    --foreground: 150 20% 95%;
+    --accent: 180 100% 40%;
+    --accent-foreground: 0 0% 0%;
     
-    --card: 220 20% 13%;
-    --card-foreground: 150 20% 95%;
+    --background: 210 20% 10%;
+    --foreground: 45 20% 95%;
     
-    --popover: 220 20% 13%;
-    --popover-foreground: 150 20% 95%;
+    --card: 210 20% 13%;
+    --card-foreground: 45 20% 95%;
     
-    --muted: 220 15% 18%;
-    --muted-foreground: 220 10% 60%;
+    --popover: 210 20% 13%;
+    --popover-foreground: 45 20% 95%;
     
-    --accent: 38 92% 50%;
-    --accent-foreground: 30 100% 10%;
+    --muted: 210 15% 18%;
+    --muted-foreground: 210 10% 60%;
     
-    --success: 152 69% 45%;
+    --info: 186 50% 25%;
+    --info-foreground: 186 90% 90%;
+    
+    --success: 180 100% 35%;
     --success-foreground: 0 0% 100%;
     
     --warning: 38 92% 50%;
     --warning-foreground: 30 100% 10%;
     
-    --destructive: 0 72% 55%;
+    --destructive: 0 65% 50%;
     --destructive-foreground: 0 0% 100%;
     
-    --info: 199 89% 55%;
-    --info-foreground: 0 0% 100%;
+    --border: 210 15% 20%;
+    --input: 210 15% 20%;
+    --ring: 180 100% 40%;
     
-    --border: 220 15% 20%;
-    --input: 220 15% 20%;
-    --ring: 166 84% 50%;
-    
-    --sidebar-background: 220 20% 8%;
-    --sidebar-foreground: 150 20% 90%;
-    --sidebar-primary: 166 84% 50%;
-    --sidebar-primary-foreground: 166 50% 10%;
-    --sidebar-accent: 220 15% 15%;
-    --sidebar-accent-foreground: 150 20% 90%;
-    --sidebar-border: 220 15% 18%;
-    --sidebar-ring: 166 84% 50%;
+    --sidebar-background: 210 25% 12%;
+    --sidebar-foreground: 45 20% 95%;
+    --sidebar-primary: 180 100% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 20% 18%;
+    --sidebar-accent-foreground: 45 20% 95%;
+    --sidebar-border: 210 15% 22%;
+    --sidebar-ring: 180 100% 40%;
   }
 }
 
@@ -128,12 +129,21 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Montserrat', system-ui, sans-serif;
   }
   
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold tracking-tight;
+  /* Typography - Bebas Neue for headings */
+  h1, h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    @apply tracking-wide;
+    font-weight: 700;
+  }
+  
+  h3, h4, h5, h6 {
+    font-family: 'Bebas Neue', sans-serif;
+    @apply tracking-wide;
+    font-weight: 400;
   }
 }
 
@@ -175,9 +185,9 @@
     @apply bg-sidebar-accent text-sidebar-accent-foreground;
   }
   
-  /* Table Row Hover */
+  /* Table Row Hover - Light Accent (#c0f0f7) */
   .table-row-interactive {
-    @apply transition-colors hover:bg-muted/50;
+    @apply transition-colors hover:bg-info/30;
   }
   
   /* Avatar Ring */
@@ -194,13 +204,13 @@
     @apply h-full rounded-full transition-all duration-500;
   }
   
-  /* Gradient Backgrounds */
+  /* Gradient Backgrounds - Using brand blues */
   .gradient-primary {
-    @apply bg-gradient-to-br from-primary to-primary/80;
+    @apply bg-gradient-to-br from-primary to-secondary;
   }
   
   .gradient-hero {
-    @apply bg-gradient-to-br from-primary via-primary/90 to-info/70;
+    @apply bg-gradient-to-br from-primary via-secondary to-accent;
   }
   
   /* Subtle Pattern */
@@ -316,9 +326,9 @@
     print-color-adjust: exact !important;
   }
   
-  /* Progress bars print correctly */
+  /* Progress bars print correctly - Social Plus Primary Blue */
   .bg-primary {
-    background-color: hsl(166 84% 32%) !important;
+    background-color: hsl(205 65% 34%) !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
