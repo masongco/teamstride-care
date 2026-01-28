@@ -40,7 +40,7 @@ export interface Employee {
 export interface Certification {
   id: string;
   name: string;
-  type: 'police_check' | 'ndis_screening' | 'first_aid' | 'cpr' | 'training' | 'other';
+  type: 'police_check' | 'ndis_screening' | 'first_aid' | 'cpr' | 'training' | 'wwcc_vic' | 'wwcc_nsw' | 'drivers_license' | 'other';
   issueDate: string;
   expiryDate: string;
   status: ComplianceStatus;
