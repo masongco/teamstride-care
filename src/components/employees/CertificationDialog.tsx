@@ -35,13 +35,16 @@ const certificationTypes = [
   { value: 'ndis_screening', label: 'NDIS Worker Screening', defaultValidityYears: 5 },
   { value: 'first_aid', label: 'First Aid Certificate', defaultValidityYears: 3 },
   { value: 'cpr', label: 'CPR Certificate', defaultValidityYears: 1 },
+  { value: 'wwcc_vic', label: 'Working with Children\'s Check Victoria', defaultValidityYears: 5 },
+  { value: 'wwcc_nsw', label: 'Working with Children\'s Check NSW', defaultValidityYears: 5 },
+  { value: 'drivers_license', label: 'Drivers License', defaultValidityYears: 10 },
   { value: 'training', label: 'Training Certificate', defaultValidityYears: 2 },
   { value: 'other', label: 'Other', defaultValidityYears: 1 },
 ] as const;
 
 const certificationSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
-  type: z.enum(['police_check', 'ndis_screening', 'first_aid', 'cpr', 'training', 'other']),
+  type: z.enum(['police_check', 'ndis_screening', 'first_aid', 'cpr', 'wwcc_vic', 'wwcc_nsw', 'drivers_license', 'training', 'other']),
   issueDate: z.date({ required_error: 'Issue date is required' }),
   expiryDate: z.date({ required_error: 'Expiry date is required' }),
 });
