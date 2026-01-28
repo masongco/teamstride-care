@@ -70,6 +70,93 @@ export type Database = {
           },
         ]
       }
+      audit_packs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          date_range_end: string | null
+          date_range_start: string | null
+          employee_id: string | null
+          error_message: string | null
+          expires_at: string | null
+          file_urls: Json | null
+          generated_by: string
+          generated_by_email: string | null
+          generated_by_name: string | null
+          id: string
+          include_attachments: boolean
+          include_restricted_content: boolean
+          organisation_id: string
+          pack_type: Database["public"]["Enums"]["audit_pack_type"]
+          retention_days: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["audit_pack_status"]
+          summary: Json | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          date_range_end?: string | null
+          date_range_start?: string | null
+          employee_id?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          file_urls?: Json | null
+          generated_by: string
+          generated_by_email?: string | null
+          generated_by_name?: string | null
+          id?: string
+          include_attachments?: boolean
+          include_restricted_content?: boolean
+          organisation_id: string
+          pack_type: Database["public"]["Enums"]["audit_pack_type"]
+          retention_days?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["audit_pack_status"]
+          summary?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          date_range_end?: string | null
+          date_range_start?: string | null
+          employee_id?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          file_urls?: Json | null
+          generated_by?: string
+          generated_by_email?: string | null
+          generated_by_name?: string | null
+          id?: string
+          include_attachments?: boolean
+          include_restricted_content?: boolean
+          organisation_id?: string
+          pack_type?: Database["public"]["Enums"]["audit_pack_type"]
+          retention_days?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["audit_pack_status"]
+          summary?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_packs_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_packs_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       award_classifications: {
         Row: {
           base_hourly_rate: number
@@ -2548,6 +2635,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      expire_audit_packs: { Args: never; Returns: undefined }
       expire_compliance_overrides: { Args: never; Returns: undefined }
       get_platform_role: {
         Args: { _user_id: string }
@@ -2592,6 +2680,17 @@ export type Database = {
         | "department"
         | "location"
         | "all"
+      audit_pack_status:
+        | "pending"
+        | "generating"
+        | "completed"
+        | "failed"
+        | "expired"
+      audit_pack_type:
+        | "employee_compliance"
+        | "organisation_compliance"
+        | "hr_incidents"
+        | "payroll_verification"
       compliance_status: "compliant" | "expiring" | "expired" | "pending"
       contract_status:
         | "draft"
@@ -2795,6 +2894,19 @@ export const Constants = {
         "department",
         "location",
         "all",
+      ],
+      audit_pack_status: [
+        "pending",
+        "generating",
+        "completed",
+        "failed",
+        "expired",
+      ],
+      audit_pack_type: [
+        "employee_compliance",
+        "organisation_compliance",
+        "hr_incidents",
+        "payroll_verification",
       ],
       compliance_status: ["compliant", "expiring", "expired", "pending"],
       contract_status: [
