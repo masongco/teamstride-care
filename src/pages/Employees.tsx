@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Download, UserX } from 'lucide-react';
+import { Search, Plus, MoreHorizontal, Mail, Phone, Download, UserX, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/status-badge';
 import {
@@ -19,14 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockEmployees } from '@/lib/mock-data';
-import { Employee, EmploymentType } from '@/types/hrms';
+import { EmploymentType, ComplianceStatus } from '@/types/hrms';
 import { cn } from '@/lib/utils';
 import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog';
 import { EmployeeDetailSheet } from '@/components/employees/EmployeeDetailSheet';
 import { toast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
+import type { EmployeeDB, EmploymentTypeDB, EmployeeStatusDB, ComplianceStatusDB } from '@/types/database';
+import type { Employee } from '@/types/hrms';
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
   casual: 'Casual',
@@ -42,19 +44,32 @@ const employmentTypeColors: Record<EmploymentType, string> = {
   contractor: 'bg-warning/10 text-warning',
 };
 
-import { EMPLOYEES_STORAGE_KEY } from '@/hooks/useEmployees';
-
-const getInitialEmployees = (): Employee[] => {
-  const stored = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch {
-      return mockEmployees;
-    }
-  }
-  return mockEmployees;
-};
+// Transform database employee to legacy Employee type for compatibility with existing components
+function dbToLegacyEmployee(emp: EmployeeDB): Employee {
+  return {
+    id: emp.id,
+    firstName: emp.first_name,
+    lastName: emp.last_name,
+    email: emp.email,
+    phone: emp.phone || '',
+    avatar: emp.avatar_url || undefined,
+    employmentType: emp.employment_type as EmploymentType,
+    position: emp.position || '',
+    department: emp.department || '',
+    startDate: emp.start_date || '',
+    status: emp.status as Employee['status'],
+    complianceStatus: emp.compliance_status as ComplianceStatus,
+    payRate: emp.pay_rate || 0,
+    awardClassification: undefined,
+    emergencyContact: emp.emergency_contact_name ? {
+      name: emp.emergency_contact_name,
+      phone: emp.emergency_contact_phone || '',
+      relationship: emp.emergency_contact_relationship || '',
+    } : undefined,
+    documents: [],
+    certifications: [],
+  };
+}
 
 export default function Employees() {
   const { isManager } = useUserRole();
@@ -64,17 +79,23 @@ export default function Employees() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [employees, setEmployees] = useState<Employee[]>(getInitialEmployees);
 
-  // Persist employees to localStorage whenever they change
-  React.useEffect(() => {
-    localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(employees));
-    // Dispatch custom event to notify other components
-    window.dispatchEvent(new Event('employees-updated'));
-  }, [employees]);
+  const {
+    employees: dbEmployees,
+    isLoading,
+    error,
+    createEmployee,
+    updateEmployee,
+    changeStatus,
+    organisationId,
+    isCreating,
+  } = useSupabaseEmployees();
+
+  // Convert DB employees to legacy format for UI compatibility
+  const employees = dbEmployees.map(dbToLegacyEmployee);
 
   const filteredEmployees = employees.filter((employee) => {
-    // Always exclude inactive/deactivated employees from the employee section
+    // Exclude inactive/deactivated employees from the main list
     if (employee.status === 'inactive') return false;
     
     const matchesSearch =
@@ -88,33 +109,51 @@ export default function Employees() {
     return matchesSearch && matchesDepartment && matchesStatus;
   });
 
-  const departments = [...new Set(employees.map((e) => e.department))];
+  const departments = [...new Set(employees.map((e) => e.department).filter(Boolean))];
 
   const handleViewProfile = (employee: Employee) => {
     setSelectedEmployee(employee);
     setDetailSheetOpen(true);
   };
 
-  const handleUpdateEmployee = (updatedEmployee: Employee) => {
-    setEmployees(employees.map(emp => 
-      emp.id === updatedEmployee.id ? updatedEmployee : emp
-    ));
-    setSelectedEmployee(updatedEmployee);
+  const handleUpdateEmployee = async (updatedEmployee: Employee) => {
+    if (!organisationId) return;
+    
+    const dbEmployee = dbEmployees.find(e => e.id === updatedEmployee.id);
+    if (!dbEmployee) return;
+
+    try {
+      await updateEmployee(updatedEmployee.id, {
+        first_name: updatedEmployee.firstName,
+        last_name: updatedEmployee.lastName,
+        email: updatedEmployee.email,
+        phone: updatedEmployee.phone || null,
+        position: updatedEmployee.position || null,
+        department: updatedEmployee.department || null,
+        employment_type: updatedEmployee.employmentType as EmploymentTypeDB,
+        pay_rate: updatedEmployee.payRate || null,
+        status: updatedEmployee.status as EmployeeStatusDB,
+        compliance_status: updatedEmployee.complianceStatus as ComplianceStatusDB,
+        emergency_contact_name: updatedEmployee.emergencyContact?.name || null,
+        emergency_contact_phone: updatedEmployee.emergencyContact?.phone || null,
+        emergency_contact_relationship: updatedEmployee.emergencyContact?.relationship || null,
+      });
+      setSelectedEmployee(updatedEmployee);
+    } catch (err) {
+      console.error('Failed to update employee:', err);
+    }
   };
 
-  const handleDeactivateEmployee = (employee: Employee) => {
+  const handleDeactivateEmployee = async (employee: Employee) => {
     const newStatus = employee.status === 'inactive' ? 'active' : 'inactive';
-    const updatedEmployee = { ...employee, status: newStatus as Employee['status'] };
-    setEmployees(employees.map(emp => 
-      emp.id === employee.id ? updatedEmployee : emp
-    ));
-    toast({
-      title: newStatus === 'inactive' ? 'Employee Deactivated' : 'Employee Activated',
-      description: `${employee.firstName} ${employee.lastName} has been ${newStatus === 'inactive' ? 'deactivated' : 'reactivated'}.`,
-    });
+    try {
+      await changeStatus(employee.id, newStatus as EmployeeStatusDB);
+    } catch (err) {
+      console.error('Failed to change status:', err);
+    }
   };
 
-  const handleAddEmployee = (newEmployee: {
+  const handleAddEmployee = async (newEmployee: {
     firstName: string;
     lastName: string;
     email: string;
@@ -125,25 +164,55 @@ export default function Employees() {
     payRate: number;
     avatar?: string;
   }) => {
-    const employee: Employee = {
-      id: `emp-${Date.now()}`,
-      firstName: newEmployee.firstName,
-      lastName: newEmployee.lastName,
-      email: newEmployee.email,
-      phone: newEmployee.phone,
-      avatar: newEmployee.avatar,
-      position: newEmployee.position,
-      department: newEmployee.department || 'General',
-      employmentType: newEmployee.employmentType as EmploymentType,
-      payRate: newEmployee.payRate,
-      startDate: new Date().toISOString(),
-      status: 'onboarding',
-      complianceStatus: 'pending',
-      documents: [],
-      certifications: [],
-    };
-    setEmployees([employee, ...employees]);
+    if (!organisationId) {
+      toast({
+        title: 'Error',
+        description: 'Organisation not available. Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await createEmployee({
+        organisation_id: organisationId,
+        first_name: newEmployee.firstName,
+        last_name: newEmployee.lastName,
+        email: newEmployee.email,
+        phone: newEmployee.phone || undefined,
+        avatar_url: newEmployee.avatar || undefined,
+        position: newEmployee.position || undefined,
+        department: newEmployee.department || undefined,
+        employment_type: newEmployee.employmentType as EmploymentTypeDB,
+        pay_rate: newEmployee.payRate || undefined,
+        start_date: new Date().toISOString().split('T')[0],
+      });
+      setAddDialogOpen(false);
+    } catch (err) {
+      console.error('Failed to add employee:', err);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-destructive">Failed to load employees. Please try again.</p>
+          <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -168,7 +237,7 @@ export default function Employees() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button className="gradient-primary" onClick={() => setAddDialogOpen(true)}>
+          <Button className="gradient-primary" onClick={() => setAddDialogOpen(true)} disabled={isCreating}>
             <Plus className="h-4 w-4 mr-2" />
             Add Employee
           </Button>
@@ -277,7 +346,7 @@ export default function Employees() {
               <div className="mt-4 pt-4 border-t border-border space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Department</span>
-                  <span className="font-medium">{employee.department}</span>
+                  <span className="font-medium">{employee.department || 'Not assigned'}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Compliance</span>
@@ -285,7 +354,7 @@ export default function Employees() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Pay Rate</span>
-                  <span className="font-medium">${employee.payRate.toFixed(2)}/hr</span>
+                  <span className="font-medium">${(employee.payRate || 0).toFixed(2)}/hr</span>
                 </div>
               </div>
 

@@ -24,6 +24,7 @@ export type Database = {
           ip_address: string | null
           new_values: Json | null
           old_values: Json | null
+          organisation_id: string | null
           user_agent: string | null
           user_email: string | null
           user_id: string | null
@@ -38,6 +39,7 @@ export type Database = {
           ip_address?: string | null
           new_values?: Json | null
           old_values?: Json | null
+          organisation_id?: string | null
           user_agent?: string | null
           user_email?: string | null
           user_id?: string | null
@@ -52,12 +54,21 @@ export type Database = {
           ip_address?: string | null
           new_values?: Json | null
           old_values?: Json | null
+          organisation_id?: string | null
           user_agent?: string | null
           user_email?: string | null
           user_id?: string | null
           user_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       award_classifications: {
         Row: {

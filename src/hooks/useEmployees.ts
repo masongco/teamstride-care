@@ -1,72 +1,63 @@
-import { useState, useEffect } from 'react';
-import { Employee } from '@/types/hrms';
-import { mockEmployees } from '@/lib/mock-data';
+/**
+ * @deprecated This hook is deprecated. Use useSupabaseEmployees instead.
+ * This file remains for backward compatibility only.
+ * Employee data is now persisted in Supabase, not localStorage.
+ */
 
-const EMPLOYEES_STORAGE_KEY = 'hrms_employees';
+import { useSupabaseEmployees } from './useSupabaseEmployees';
+import type { Employee } from '@/types/hrms';
+import type { EmployeeDB } from '@/types/database';
 
-// Initialize localStorage with mock data if empty or corrupted
-const initializeEmployees = (): Employee[] => {
-  const stored = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      // Validate that we have an array with employees
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    } catch {
-      // Fall through to initialize with mock data
-    }
-  }
-  // Initialize with mock data
-  localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(mockEmployees));
-  return mockEmployees;
-};
+// Legacy storage key - no longer used, but kept for reference
+export const EMPLOYEES_STORAGE_KEY = 'hrms_employees';
 
-const getStoredEmployees = (): Employee[] => {
-  const stored = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    } catch {
-      // Fall through
-    }
-  }
-  // Re-initialize if data is missing or corrupted
-  return initializeEmployees();
-};
+// Transform DB employee to legacy format
+function dbToLegacyEmployee(emp: EmployeeDB): Employee {
+  return {
+    id: emp.id,
+    firstName: emp.first_name,
+    lastName: emp.last_name,
+    email: emp.email,
+    phone: emp.phone || '',
+    avatar: emp.avatar_url || undefined,
+    employmentType: emp.employment_type as Employee['employmentType'],
+    position: emp.position || '',
+    department: emp.department || '',
+    startDate: emp.start_date || '',
+    status: emp.status as Employee['status'],
+    complianceStatus: emp.compliance_status as Employee['complianceStatus'],
+    payRate: emp.pay_rate || 0,
+    awardClassification: undefined,
+    emergencyContact: emp.emergency_contact_name ? {
+      name: emp.emergency_contact_name,
+      phone: emp.emergency_contact_phone || '',
+      relationship: emp.emergency_contact_relationship || '',
+    } : undefined,
+    documents: [],
+    certifications: [],
+  };
+}
 
+/**
+ * @deprecated Use useSupabaseEmployees instead.
+ * This hook provides backward compatibility for components still using the old interface.
+ */
 export function useEmployees() {
-  const [employees, setEmployees] = useState<Employee[]>(() => initializeEmployees());
+  const {
+    employees: dbEmployees,
+    activeEmployees: dbActiveEmployees,
+    refetch,
+    isLoading,
+  } = useSupabaseEmployees();
 
-  // Listen for storage changes (in case employees are updated in another tab/component)
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setEmployees(getStoredEmployees());
-    };
-
-    // Also listen for custom events from the same tab
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('employees-updated', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('employees-updated', handleStorageChange);
-    };
-  }, []);
-
-  // Get only active employees
-  const activeEmployees = employees.filter(e => e.status === 'active');
+  // Transform to legacy format
+  const employees = dbEmployees.map(dbToLegacyEmployee);
+  const activeEmployees = dbActiveEmployees.map(dbToLegacyEmployee);
 
   return {
     employees,
     activeEmployees,
-    refetch: () => setEmployees(getStoredEmployees()),
+    refetch,
+    isLoading,
   };
 }
-
-// Export the storage key so it can be used consistently
-export { EMPLOYEES_STORAGE_KEY };
