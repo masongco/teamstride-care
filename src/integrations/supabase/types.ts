@@ -499,6 +499,74 @@ export type Database = {
         }
         Relationships: []
       }
+      document_distributions: {
+        Row: {
+          acknowledged_at: string | null
+          created_at: string
+          downloaded_at: string | null
+          id: string
+          notes: string | null
+          org_document_id: string
+          recipient_email: string
+          recipient_name: string
+          recipient_user_id: string
+          sent_at: string | null
+          sent_by: string | null
+          sent_by_name: string | null
+          signature_data: string | null
+          signed_at: string | null
+          status: Database["public"]["Enums"]["distribution_status"]
+          updated_at: string
+          viewed_at: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          created_at?: string
+          downloaded_at?: string | null
+          id?: string
+          notes?: string | null
+          org_document_id: string
+          recipient_email: string
+          recipient_name: string
+          recipient_user_id: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_by_name?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          status?: Database["public"]["Enums"]["distribution_status"]
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          created_at?: string
+          downloaded_at?: string | null
+          id?: string
+          notes?: string | null
+          org_document_id?: string
+          recipient_email?: string
+          recipient_name?: string
+          recipient_user_id?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_by_name?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          status?: Database["public"]["Enums"]["distribution_status"]
+          updated_at?: string
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_distributions_org_document_id_fkey"
+            columns: ["org_document_id"]
+            isOneToOne: false
+            referencedRelation: "org_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_reviews: {
         Row: {
           action: Database["public"]["Enums"]["document_status"]
@@ -796,6 +864,63 @@ export type Database = {
           title?: string
           type?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      org_documents: {
+        Row: {
+          category: Database["public"]["Enums"]["org_document_category"]
+          created_at: string
+          description: string | null
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+          is_active: boolean | null
+          mime_type: string | null
+          requires_acknowledgment: boolean | null
+          requires_signature: boolean | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+          uploaded_by_name: string | null
+          version: number | null
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["org_document_category"]
+          created_at?: string
+          description?: string | null
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          is_active?: boolean | null
+          mime_type?: string | null
+          requires_acknowledgment?: boolean | null
+          requires_signature?: boolean | null
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+          uploaded_by_name?: string | null
+          version?: number | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["org_document_category"]
+          created_at?: string
+          description?: string | null
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          is_active?: boolean | null
+          mime_type?: string | null
+          requires_acknowledgment?: boolean | null
+          requires_signature?: boolean | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          uploaded_by_name?: string | null
+          version?: number | null
         }
         Relationships: []
       }
@@ -1441,9 +1566,23 @@ export type Database = {
         | "signed"
         | "expired"
         | "voided"
+      distribution_status:
+        | "pending"
+        | "sent"
+        | "viewed"
+        | "downloaded"
+        | "acknowledged"
+        | "signed"
       document_status: "pending" | "approved" | "rejected" | "expired"
       feedback_type: "self" | "manager" | "peer" | "direct_report"
       module_type: "video" | "pdf" | "policy" | "quiz"
+      org_document_category:
+        | "contract_template"
+        | "handbook"
+        | "policy"
+        | "procedure"
+        | "training"
+        | "other"
       recurrence_type: "none" | "annual" | "biannual" | "quarterly" | "monthly"
       review_status: "draft" | "in_progress" | "pending_approval" | "completed"
       review_type: "performance" | "annual" | "probation"
@@ -1591,9 +1730,25 @@ export const Constants = {
         "expired",
         "voided",
       ],
+      distribution_status: [
+        "pending",
+        "sent",
+        "viewed",
+        "downloaded",
+        "acknowledged",
+        "signed",
+      ],
       document_status: ["pending", "approved", "rejected", "expired"],
       feedback_type: ["self", "manager", "peer", "direct_report"],
       module_type: ["video", "pdf", "policy", "quiz"],
+      org_document_category: [
+        "contract_template",
+        "handbook",
+        "policy",
+        "procedure",
+        "training",
+        "other",
+      ],
       recurrence_type: ["none", "annual", "biannual", "quarterly", "monthly"],
       review_status: ["draft", "in_progress", "pending_approval", "completed"],
       review_type: ["performance", "annual", "probation"],
