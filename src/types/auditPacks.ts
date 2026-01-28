@@ -48,6 +48,9 @@ export interface AuditPackSummary {
   cases?: number;
   timesheets?: number;
   employees?: number;
+  payPeriods?: number;
+  payrollExports?: number;
+  timesheetUnlocks?: number;
   [key: string]: number | string | undefined;
 }
 
@@ -71,6 +74,8 @@ export interface AuditPackPreview {
     auditLogs?: number;
     cases?: number;
     timesheets?: number;
+    payPeriods?: number;
+    payrollExports?: number;
   };
 }
 
