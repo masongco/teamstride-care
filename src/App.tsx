@@ -30,6 +30,14 @@ import MyGoals from "./pages/portal/MyGoals";
 import LMSAdmin from "./pages/lms/LMSAdmin";
 import CourseBuilder from "./pages/lms/CourseBuilder";
 import AssignmentManager from "./pages/lms/AssignmentManager";
+// Platform Admin pages
+import PlatformLogin from "./pages/platform/PlatformLogin";
+import OrganisationsList from "./pages/platform/OrganisationsList";
+import OrganisationDetail from "./pages/platform/OrganisationDetail";
+import PlansList from "./pages/platform/PlansList";
+import PlatformUsers from "./pages/platform/PlatformUsers";
+import AuditLogs from "./pages/platform/AuditLogs";
+import PlatformSettings from "./pages/platform/PlatformSettings";
 
 const queryClient = new QueryClient();
 
@@ -243,6 +251,14 @@ const App = () => (
               </ProtectedPageWithLayout>
             }
           />
+          {/* Platform Admin Routes */}
+          <Route path="/platform/login" element={<PlatformLogin />} />
+          <Route path="/platform/orgs" element={<OrganisationsList />} />
+          <Route path="/platform/orgs/:id" element={<OrganisationDetail />} />
+          <Route path="/platform/plans" element={<PlansList />} />
+          <Route path="/platform/users" element={<PlatformUsers />} />
+          <Route path="/platform/audit" element={<AuditLogs />} />
+          <Route path="/platform/settings" element={<PlatformSettings />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
