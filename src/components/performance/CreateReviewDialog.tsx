@@ -25,7 +25,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -33,15 +32,15 @@ import { CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { usePerformanceReviews } from '@/hooks/usePerformance';
+import { mockEmployees } from '@/lib/mock-data';
 import type { ReviewType } from '@/types/performance';
 
+// Get only active employees for selection
+const activeEmployees = mockEmployees.filter(e => e.status === 'active');
+
 const reviewSchema = z.object({
-  employee_name: z.string().min(1, 'Employee name is required').max(100),
-  employee_email: z.string().email('Invalid email address'),
-  employee_position: z.string().max(100).optional(),
-  employee_department: z.string().max(100).optional(),
-  reviewer_name: z.string().min(1, 'Reviewer name is required').max(100),
-  reviewer_email: z.string().email('Invalid email address'),
+  employee_id: z.string().min(1, 'Please select an employee'),
+  reviewer_id: z.string().min(1, 'Please select a reviewer'),
   review_type: z.enum(['performance', 'annual', 'probation']),
   review_period_start: z.date({ required_error: 'Start date is required' }),
   review_period_end: z.date({ required_error: 'End date is required' }),
@@ -61,26 +60,30 @@ export function CreateReviewDialog({ open, onOpenChange }: CreateReviewDialogPro
   const form = useForm<ReviewFormValues>({
     resolver: zodResolver(reviewSchema),
     defaultValues: {
-      employee_name: '',
-      employee_email: '',
-      employee_position: '',
-      employee_department: '',
-      reviewer_name: '',
-      reviewer_email: '',
+      employee_id: '',
+      reviewer_id: '',
       review_type: 'performance',
     },
   });
 
+  const selectedEmployeeId = form.watch('employee_id');
+  const selectedReviewerId = form.watch('reviewer_id');
+
   const onSubmit = async (values: ReviewFormValues) => {
+    const employee = activeEmployees.find(e => e.id === values.employee_id);
+    const reviewer = activeEmployees.find(e => e.id === values.reviewer_id);
+    
+    if (!employee || !reviewer) return;
+
     setIsSubmitting(true);
     try {
       await createReview({
-        employee_name: values.employee_name,
-        employee_email: values.employee_email,
-        employee_position: values.employee_position || null,
-        employee_department: values.employee_department || null,
-        reviewer_name: values.reviewer_name,
-        reviewer_email: values.reviewer_email,
+        employee_name: `${employee.firstName} ${employee.lastName}`,
+        employee_email: employee.email,
+        employee_position: employee.position || null,
+        employee_department: employee.department || null,
+        reviewer_name: `${reviewer.firstName} ${reviewer.lastName}`,
+        reviewer_email: reviewer.email,
         review_type: values.review_type as ReviewType,
         review_period_start: format(values.review_period_start, 'yyyy-MM-dd'),
         review_period_end: format(values.review_period_end, 'yyyy-MM-dd'),
@@ -114,94 +117,76 @@ export function CreateReviewDialog({ open, onOpenChange }: CreateReviewDialogPro
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-4">
               <h4 className="text-sm font-medium text-muted-foreground">Employee Details</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="employee_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Employee Name</FormLabel>
+              <FormField
+                control={form.control}
+                name="employee_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Employee</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <Input placeholder="John Smith" {...field} />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an employee to review" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="employee_email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Employee Email</FormLabel>
-                      <FormControl>
-                        <Input placeholder="john@example.com" type="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="employee_position"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Position (Optional)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Support Worker" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="employee_department"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Department (Optional)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Disability Services" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                      <SelectContent className="bg-popover">
+                        {activeEmployees
+                          .filter(e => e.id !== selectedReviewerId)
+                          .map((employee) => (
+                            <SelectItem key={employee.id} value={employee.id}>
+                              {employee.firstName} {employee.lastName} - {employee.position}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {selectedEmployeeId && (
+                <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                  {(() => {
+                    const emp = activeEmployees.find(e => e.id === selectedEmployeeId);
+                    return emp ? (
+                      <div className="space-y-1">
+                        <p><span className="font-medium">Email:</span> {emp.email}</p>
+                        <p><span className="font-medium">Position:</span> {emp.position}</p>
+                        <p><span className="font-medium">Department:</span> {emp.department}</p>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
               <h4 className="text-sm font-medium text-muted-foreground">Reviewer Details</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="reviewer_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reviewer Name</FormLabel>
+              <FormField
+                control={form.control}
+                name="reviewer_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Reviewer</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <Input placeholder="Jane Doe" {...field} />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a reviewer" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="reviewer_email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reviewer Email</FormLabel>
-                      <FormControl>
-                        <Input placeholder="jane@example.com" type="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                      <SelectContent className="bg-popover">
+                        {activeEmployees
+                          .filter(e => e.id !== selectedEmployeeId)
+                          .map((employee) => (
+                            <SelectItem key={employee.id} value={employee.id}>
+                              {employee.firstName} {employee.lastName} - {employee.position}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <div className="space-y-4">
