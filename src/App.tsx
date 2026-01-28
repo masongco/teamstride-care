@@ -19,6 +19,7 @@ import Payroll from "./pages/Payroll";
 import Performance from "./pages/Performance";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import HRCases from "./pages/HRCases";
 // Portal pages
 import PortalDashboard from "./pages/portal/PortalDashboard";
 import MyDocuments from "./pages/portal/MyDocuments";
@@ -156,6 +157,14 @@ const App = () => (
                   <h1 className="text-2xl font-bold">Reports</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/hr-cases"
+            element={
+              <ProtectedPageWithLayout>
+                <HRCases />
               </ProtectedPageWithLayout>
             }
           />

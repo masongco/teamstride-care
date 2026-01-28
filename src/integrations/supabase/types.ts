@@ -1012,6 +1012,328 @@ export type Database = {
           },
         ]
       }
+      hr_case_actions: {
+        Row: {
+          action_type: Database["public"]["Enums"]["hr_action_type"]
+          assigned_to_name: string | null
+          assigned_to_user_id: string | null
+          created_at: string
+          created_by_name: string | null
+          created_by_user_id: string
+          description: string
+          effective_date: string
+          expiry_date: string | null
+          hr_case_id: string
+          id: string
+          status: Database["public"]["Enums"]["hr_action_status"]
+          updated_at: string
+        }
+        Insert: {
+          action_type: Database["public"]["Enums"]["hr_action_type"]
+          assigned_to_name?: string | null
+          assigned_to_user_id?: string | null
+          created_at?: string
+          created_by_name?: string | null
+          created_by_user_id: string
+          description: string
+          effective_date: string
+          expiry_date?: string | null
+          hr_case_id: string
+          id?: string
+          status?: Database["public"]["Enums"]["hr_action_status"]
+          updated_at?: string
+        }
+        Update: {
+          action_type?: Database["public"]["Enums"]["hr_action_type"]
+          assigned_to_name?: string | null
+          assigned_to_user_id?: string | null
+          created_at?: string
+          created_by_name?: string | null
+          created_by_user_id?: string
+          description?: string
+          effective_date?: string
+          expiry_date?: string | null
+          hr_case_id?: string
+          id?: string
+          status?: Database["public"]["Enums"]["hr_action_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_case_actions_hr_case_id_fkey"
+            columns: ["hr_case_id"]
+            isOneToOne: false
+            referencedRelation: "hr_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_case_evidence: {
+        Row: {
+          access_level: Database["public"]["Enums"]["hr_access_level"]
+          created_at: string
+          description: string | null
+          file_name: string
+          file_url: string
+          hr_case_id: string
+          id: string
+          uploaded_at: string
+          uploaded_by_name: string | null
+          uploaded_by_user_id: string
+        }
+        Insert: {
+          access_level?: Database["public"]["Enums"]["hr_access_level"]
+          created_at?: string
+          description?: string | null
+          file_name: string
+          file_url: string
+          hr_case_id: string
+          id?: string
+          uploaded_at?: string
+          uploaded_by_name?: string | null
+          uploaded_by_user_id: string
+        }
+        Update: {
+          access_level?: Database["public"]["Enums"]["hr_access_level"]
+          created_at?: string
+          description?: string | null
+          file_name?: string
+          file_url?: string
+          hr_case_id?: string
+          id?: string
+          uploaded_at?: string
+          uploaded_by_name?: string | null
+          uploaded_by_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_case_evidence_hr_case_id_fkey"
+            columns: ["hr_case_id"]
+            isOneToOne: false
+            referencedRelation: "hr_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_case_findings: {
+        Row: {
+          contributing_factors: string | null
+          created_at: string
+          decision_date: string
+          decision_maker_name: string | null
+          decision_maker_user_id: string
+          findings_summary: string
+          hr_case_id: string
+          id: string
+          substantiated: Database["public"]["Enums"]["hr_case_substantiation"]
+          updated_at: string
+        }
+        Insert: {
+          contributing_factors?: string | null
+          created_at?: string
+          decision_date?: string
+          decision_maker_name?: string | null
+          decision_maker_user_id: string
+          findings_summary: string
+          hr_case_id: string
+          id?: string
+          substantiated: Database["public"]["Enums"]["hr_case_substantiation"]
+          updated_at?: string
+        }
+        Update: {
+          contributing_factors?: string | null
+          created_at?: string
+          decision_date?: string
+          decision_maker_name?: string | null
+          decision_maker_user_id?: string
+          findings_summary?: string
+          hr_case_id?: string
+          id?: string
+          substantiated?: Database["public"]["Enums"]["hr_case_substantiation"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_case_findings_hr_case_id_fkey"
+            columns: ["hr_case_id"]
+            isOneToOne: false
+            referencedRelation: "hr_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_case_notes: {
+        Row: {
+          created_at: string
+          created_by_name: string | null
+          created_by_user_id: string
+          hr_case_id: string
+          id: string
+          note_text: string
+          visibility: Database["public"]["Enums"]["hr_note_visibility"]
+        }
+        Insert: {
+          created_at?: string
+          created_by_name?: string | null
+          created_by_user_id: string
+          hr_case_id: string
+          id?: string
+          note_text: string
+          visibility?: Database["public"]["Enums"]["hr_note_visibility"]
+        }
+        Update: {
+          created_at?: string
+          created_by_name?: string | null
+          created_by_user_id?: string
+          hr_case_id?: string
+          id?: string
+          note_text?: string
+          visibility?: Database["public"]["Enums"]["hr_note_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_case_notes_hr_case_id_fkey"
+            columns: ["hr_case_id"]
+            isOneToOne: false
+            referencedRelation: "hr_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_case_triage: {
+        Row: {
+          created_at: string
+          escalated_to: string | null
+          escalation_required: boolean
+          hr_case_id: string
+          id: string
+          immediate_actions_taken: string | null
+          initial_risk_assessment: string
+          triaged_at: string
+          triaged_by_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          escalated_to?: string | null
+          escalation_required?: boolean
+          hr_case_id: string
+          id?: string
+          immediate_actions_taken?: string | null
+          initial_risk_assessment: string
+          triaged_at?: string
+          triaged_by_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          escalated_to?: string | null
+          escalation_required?: boolean
+          hr_case_id?: string
+          id?: string
+          immediate_actions_taken?: string | null
+          initial_risk_assessment?: string
+          triaged_at?: string
+          triaged_by_user_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_case_triage_hr_case_id_fkey"
+            columns: ["hr_case_id"]
+            isOneToOne: false
+            referencedRelation: "hr_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_cases: {
+        Row: {
+          assigned_investigator_user_id: string | null
+          case_number: string
+          case_type: Database["public"]["Enums"]["hr_case_type"]
+          closed_at: string | null
+          closure_notes: string | null
+          confidentiality_level: Database["public"]["Enums"]["hr_case_confidentiality"]
+          created_at: string
+          created_by_user_id: string | null
+          date_reported: string
+          detailed_description: string | null
+          employee_id: string | null
+          id: string
+          organisation_id: string
+          reported_by: Database["public"]["Enums"]["hr_case_reporter_type"]
+          reporter_contact: string | null
+          reporter_name: string | null
+          safeguarding_flag: boolean
+          severity: Database["public"]["Enums"]["hr_case_severity"]
+          status: Database["public"]["Enums"]["hr_case_status"]
+          summary: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_investigator_user_id?: string | null
+          case_number: string
+          case_type: Database["public"]["Enums"]["hr_case_type"]
+          closed_at?: string | null
+          closure_notes?: string | null
+          confidentiality_level?: Database["public"]["Enums"]["hr_case_confidentiality"]
+          created_at?: string
+          created_by_user_id?: string | null
+          date_reported?: string
+          detailed_description?: string | null
+          employee_id?: string | null
+          id?: string
+          organisation_id: string
+          reported_by: Database["public"]["Enums"]["hr_case_reporter_type"]
+          reporter_contact?: string | null
+          reporter_name?: string | null
+          safeguarding_flag?: boolean
+          severity?: Database["public"]["Enums"]["hr_case_severity"]
+          status?: Database["public"]["Enums"]["hr_case_status"]
+          summary: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_investigator_user_id?: string | null
+          case_number?: string
+          case_type?: Database["public"]["Enums"]["hr_case_type"]
+          closed_at?: string | null
+          closure_notes?: string | null
+          confidentiality_level?: Database["public"]["Enums"]["hr_case_confidentiality"]
+          created_at?: string
+          created_by_user_id?: string | null
+          date_reported?: string
+          detailed_description?: string | null
+          employee_id?: string | null
+          id?: string
+          organisation_id?: string
+          reported_by?: Database["public"]["Enums"]["hr_case_reporter_type"]
+          reporter_contact?: string | null
+          reporter_name?: string | null
+          safeguarding_flag?: boolean
+          severity?: Database["public"]["Enums"]["hr_case_severity"]
+          status?: Database["public"]["Enums"]["hr_case_status"]
+          summary?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_cases_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_cases_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leave_requests: {
         Row: {
           approved_at: string | null
@@ -2218,6 +2540,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_hr_case: {
+        Args: { _case_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_access_restricted_hr_content: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       expire_compliance_overrides: { Args: never; Returns: undefined }
       get_platform_role: {
         Args: { _user_id: string }
@@ -2285,6 +2615,35 @@ export type Database = {
         | "terminated"
       employment_type: "casual" | "part_time" | "full_time" | "contractor"
       feedback_type: "self" | "manager" | "peer" | "direct_report"
+      hr_access_level: "normal" | "restricted"
+      hr_action_status: "planned" | "active" | "completed" | "withdrawn"
+      hr_action_type:
+        | "verbal_warning"
+        | "written_warning"
+        | "final_warning"
+        | "training"
+        | "supervision"
+        | "termination"
+        | "no_action"
+        | "other"
+      hr_case_confidentiality: "standard" | "restricted"
+      hr_case_reporter_type: "manager" | "employee" | "external" | "anonymous"
+      hr_case_severity: "low" | "medium" | "high" | "critical"
+      hr_case_status:
+        | "new"
+        | "triaged"
+        | "investigating"
+        | "awaiting_response"
+        | "decision_made"
+        | "closed"
+      hr_case_substantiation: "yes" | "no" | "partially"
+      hr_case_type:
+        | "incident"
+        | "misconduct"
+        | "grievance"
+        | "performance"
+        | "complaint"
+      hr_note_visibility: "standard" | "restricted"
       module_type: "video" | "pdf" | "policy" | "quiz"
       org_document_category:
         | "contract_template"
@@ -2463,6 +2822,38 @@ export const Constants = {
       ],
       employment_type: ["casual", "part_time", "full_time", "contractor"],
       feedback_type: ["self", "manager", "peer", "direct_report"],
+      hr_access_level: ["normal", "restricted"],
+      hr_action_status: ["planned", "active", "completed", "withdrawn"],
+      hr_action_type: [
+        "verbal_warning",
+        "written_warning",
+        "final_warning",
+        "training",
+        "supervision",
+        "termination",
+        "no_action",
+        "other",
+      ],
+      hr_case_confidentiality: ["standard", "restricted"],
+      hr_case_reporter_type: ["manager", "employee", "external", "anonymous"],
+      hr_case_severity: ["low", "medium", "high", "critical"],
+      hr_case_status: [
+        "new",
+        "triaged",
+        "investigating",
+        "awaiting_response",
+        "decision_made",
+        "closed",
+      ],
+      hr_case_substantiation: ["yes", "no", "partially"],
+      hr_case_type: [
+        "incident",
+        "misconduct",
+        "grievance",
+        "performance",
+        "complaint",
+      ],
+      hr_note_visibility: ["standard", "restricted"],
       module_type: ["video", "pdf", "policy", "quiz"],
       org_document_category: [
         "contract_template",
