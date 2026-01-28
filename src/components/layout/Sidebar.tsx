@@ -15,9 +15,15 @@ import {
   DollarSign,
   HelpCircle,
   Target,
+  GraduationCap,
+  FolderOpen,
+  User,
+  Star,
+  BookOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Separator } from '@/components/ui/separator';
 import { useSidebarSettings } from '@/hooks/useSidebarSettings';
 
 interface NavItem {
@@ -37,8 +43,17 @@ const allNavItems: NavItem[] = [
   { label: 'Documents', icon: FileText, href: '/documents', moduleKey: 'documents' },
   { label: 'Contracts', icon: ClipboardList, href: '/contracts', moduleKey: 'contracts' },
   { label: 'Performance', icon: Target, href: '/performance', moduleKey: 'performance' },
+  { label: 'LMS Admin', icon: BookOpen, href: '/lms', moduleKey: 'lms' },
   { label: 'Payroll', icon: DollarSign, href: '/payroll', moduleKey: 'payroll' },
   { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports' },
+];
+
+const portalNavItems: NavItem[] = [
+  { label: 'My Portal', icon: LayoutDashboard, href: '/portal', moduleKey: 'portal' },
+  { label: 'My Documents', icon: FolderOpen, href: '/portal/documents', moduleKey: 'portal-documents' },
+  { label: 'My Training', icon: GraduationCap, href: '/portal/training', moduleKey: 'portal-training' },
+  { label: 'My Reviews', icon: Star, href: '/portal/reviews', moduleKey: 'portal-reviews' },
+  { label: 'My Profile', icon: User, href: '/portal/profile', moduleKey: 'portal-profile' },
 ];
 
 const bottomNavItems: NavItem[] = [
@@ -136,6 +151,19 @@ export function Sidebar() {
       {/* Main Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {sortedNavItems.map((item) => (
+          <NavLink key={item.href} item={item} />
+        ))}
+        
+        {/* Portal Section */}
+        {!collapsed && (
+          <div className="pt-4 pb-2">
+            <span className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+              Self-Service
+            </span>
+          </div>
+        )}
+        {collapsed && <Separator className="my-2" />}
+        {portalNavItems.map((item) => (
           <NavLink key={item.href} item={item} />
         ))}
       </nav>
