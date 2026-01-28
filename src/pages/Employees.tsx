@@ -3,7 +3,7 @@ import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Download, UserX } fr
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/status-badge';
 import {
   DropdownMenu,
@@ -121,6 +121,7 @@ export default function Employees() {
     department: string;
     employmentType: string;
     payRate: number;
+    avatar?: string;
   }) => {
     const employee: Employee = {
       id: `emp-${Date.now()}`,
@@ -128,6 +129,7 @@ export default function Employees() {
       lastName: newEmployee.lastName,
       email: newEmployee.email,
       phone: newEmployee.phone,
+      avatar: newEmployee.avatar,
       position: newEmployee.position,
       department: newEmployee.department || 'General',
       employmentType: newEmployee.employmentType as EmploymentType,
@@ -224,6 +226,7 @@ export default function Employees() {
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
                   <Avatar className="h-12 w-12 avatar-ring">
+                    <AvatarImage src={employee.avatar} alt={`${employee.firstName} ${employee.lastName}`} />
                     <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                       {employee.firstName[0]}
                       {employee.lastName[0]}
