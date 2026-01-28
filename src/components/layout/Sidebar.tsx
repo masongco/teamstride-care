@@ -14,6 +14,7 @@ import {
   ClipboardList,
   DollarSign,
   HelpCircle,
+  Target,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -35,6 +36,7 @@ const allNavItems: NavItem[] = [
   { label: 'Recruitment', icon: UserPlus, href: '/recruitment', moduleKey: 'recruitment' },
   { label: 'Documents', icon: FileText, href: '/documents', moduleKey: 'documents' },
   { label: 'Contracts', icon: ClipboardList, href: '/contracts', moduleKey: 'contracts' },
+  { label: 'Performance', icon: Target, href: '/performance', moduleKey: 'performance' },
   { label: 'Payroll', icon: DollarSign, href: '/payroll', moduleKey: 'payroll' },
   { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports' },
 ];

@@ -59,6 +59,84 @@ export type Database = {
         }
         Relationships: []
       }
+      competencies: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      competency_ratings: {
+        Row: {
+          comments: string | null
+          competency_id: string
+          created_at: string
+          id: string
+          rating: number | null
+          review_id: string
+          updated_at: string
+        }
+        Insert: {
+          comments?: string | null
+          competency_id: string
+          created_at?: string
+          id?: string
+          rating?: number | null
+          review_id: string
+          updated_at?: string
+        }
+        Update: {
+          comments?: string | null
+          competency_id?: string
+          created_at?: string
+          id?: string
+          rating?: number | null
+          review_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competency_ratings_competency_id_fkey"
+            columns: ["competency_id"]
+            isOneToOne: false
+            referencedRelation: "competencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competency_ratings_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "performance_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_audit_log: {
         Row: {
           action: string
@@ -187,6 +265,75 @@ export type Database = {
         }
         Relationships: []
       }
+      performance_reviews: {
+        Row: {
+          areas_for_improvement: string | null
+          completed_at: string | null
+          created_at: string
+          development_plan: string | null
+          employee_comments: string | null
+          employee_department: string | null
+          employee_email: string
+          employee_name: string
+          employee_position: string | null
+          id: string
+          overall_feedback: string | null
+          overall_rating: number | null
+          review_period_end: string
+          review_period_start: string
+          review_type: Database["public"]["Enums"]["review_type"]
+          reviewer_email: string
+          reviewer_name: string
+          status: Database["public"]["Enums"]["review_status"]
+          strengths: string | null
+          updated_at: string
+        }
+        Insert: {
+          areas_for_improvement?: string | null
+          completed_at?: string | null
+          created_at?: string
+          development_plan?: string | null
+          employee_comments?: string | null
+          employee_department?: string | null
+          employee_email: string
+          employee_name: string
+          employee_position?: string | null
+          id?: string
+          overall_feedback?: string | null
+          overall_rating?: number | null
+          review_period_end: string
+          review_period_start: string
+          review_type?: Database["public"]["Enums"]["review_type"]
+          reviewer_email: string
+          reviewer_name: string
+          status?: Database["public"]["Enums"]["review_status"]
+          strengths?: string | null
+          updated_at?: string
+        }
+        Update: {
+          areas_for_improvement?: string | null
+          completed_at?: string | null
+          created_at?: string
+          development_plan?: string | null
+          employee_comments?: string | null
+          employee_department?: string | null
+          employee_email?: string
+          employee_name?: string
+          employee_position?: string | null
+          id?: string
+          overall_feedback?: string | null
+          overall_rating?: number | null
+          review_period_end?: string
+          review_period_start?: string
+          review_type?: Database["public"]["Enums"]["review_type"]
+          reviewer_email?: string
+          reviewer_name?: string
+          status?: Database["public"]["Enums"]["review_status"]
+          strengths?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       positions: {
         Row: {
           created_at: string
@@ -248,6 +395,118 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      review_feedback: {
+        Row: {
+          additional_comments: string | null
+          areas_for_improvement: string | null
+          created_at: string
+          feedback_type: Database["public"]["Enums"]["feedback_type"]
+          id: string
+          is_anonymous: boolean | null
+          overall_rating: number | null
+          relationship_to_employee: string | null
+          responder_email: string
+          responder_name: string
+          review_id: string
+          status: string | null
+          strengths: string | null
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          additional_comments?: string | null
+          areas_for_improvement?: string | null
+          created_at?: string
+          feedback_type: Database["public"]["Enums"]["feedback_type"]
+          id?: string
+          is_anonymous?: boolean | null
+          overall_rating?: number | null
+          relationship_to_employee?: string | null
+          responder_email: string
+          responder_name: string
+          review_id: string
+          status?: string | null
+          strengths?: string | null
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          additional_comments?: string | null
+          areas_for_improvement?: string | null
+          created_at?: string
+          feedback_type?: Database["public"]["Enums"]["feedback_type"]
+          id?: string
+          is_anonymous?: boolean | null
+          overall_rating?: number | null
+          relationship_to_employee?: string | null
+          responder_email?: string
+          responder_name?: string
+          review_id?: string
+          status?: string | null
+          strengths?: string | null
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_feedback_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "performance_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      review_goals: {
+        Row: {
+          created_at: string
+          description: string | null
+          employee_notes: string | null
+          id: string
+          manager_notes: string | null
+          progress_percentage: number | null
+          review_id: string
+          status: string | null
+          target_date: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          employee_notes?: string | null
+          id?: string
+          manager_notes?: string | null
+          progress_percentage?: number | null
+          review_id: string
+          status?: string | null
+          target_date?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          employee_notes?: string | null
+          id?: string
+          manager_notes?: string | null
+          progress_percentage?: number | null
+          review_id?: string
+          status?: string | null
+          target_date?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_goals_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "performance_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sidebar_settings: {
         Row: {
@@ -323,6 +582,104 @@ export type Database = {
           },
         ]
       }
+      supervision_sessions: {
+        Row: {
+          action_items: string | null
+          created_at: string
+          created_by: string | null
+          duration_minutes: number | null
+          follow_up_required: boolean | null
+          id: string
+          location: string | null
+          next_session_date: string | null
+          notes: string | null
+          session_date: string
+          supervision_id: string
+          topics_discussed: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_items?: string | null
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number | null
+          follow_up_required?: boolean | null
+          id?: string
+          location?: string | null
+          next_session_date?: string | null
+          notes?: string | null
+          session_date: string
+          supervision_id: string
+          topics_discussed?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_items?: string | null
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number | null
+          follow_up_required?: boolean | null
+          id?: string
+          location?: string | null
+          next_session_date?: string | null
+          notes?: string | null
+          session_date?: string
+          supervision_id?: string
+          topics_discussed?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supervision_sessions_supervision_id_fkey"
+            columns: ["supervision_id"]
+            isOneToOne: false
+            referencedRelation: "supervisions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supervisions: {
+        Row: {
+          created_at: string
+          employee_email: string
+          employee_name: string
+          end_date: string | null
+          id: string
+          is_active: boolean
+          notes: string | null
+          start_date: string
+          supervisor_email: string
+          supervisor_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          employee_email: string
+          employee_name: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          start_date?: string
+          supervisor_email: string
+          supervisor_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          employee_email?: string
+          employee_name?: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          start_date?: string
+          supervisor_email?: string
+          supervisor_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -372,6 +729,9 @@ export type Database = {
         | "signed"
         | "expired"
         | "voided"
+      feedback_type: "self" | "manager" | "peer" | "direct_report"
+      review_status: "draft" | "in_progress" | "pending_approval" | "completed"
+      review_type: "performance" | "annual" | "probation"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -507,6 +867,9 @@ export const Constants = {
         "expired",
         "voided",
       ],
+      feedback_type: ["self", "manager", "peer", "direct_report"],
+      review_status: ["draft", "in_progress", "pending_approval", "completed"],
+      review_type: ["performance", "annual", "probation"],
     },
   },
 } as const
