@@ -589,7 +589,104 @@ async function generatePayrollPack(
   endDate: string,
   csvFiles: { name: string; content: string }[]
 ): Promise<Record<string, unknown>> {
-  // Build timesheet query
+  // =====================================================
+  // Pay Periods in date range
+  // =====================================================
+  let payPeriodsQuery = supabase
+    .from('pay_periods')
+    .select('*')
+    .eq('organisation_id', pack.organisation_id)
+    .or(`start_date.lte.${endDate},end_date.gte.${startDate}`)
+    .order('start_date', { ascending: false });
+
+  const { data: payPeriods } = await payPeriodsQuery;
+
+  if (payPeriods && payPeriods.length > 0) {
+    csvFiles.push({
+      name: 'pay_periods.csv',
+      // deno-lint-ignore no-explicit-any
+      content: arrayToCSV(payPeriods.map((p: any) => ({
+        id: p.id,
+        start_date: p.start_date,
+        end_date: p.end_date,
+        status: p.status,
+        created_by_name: p.created_by_name,
+        created_by_email: p.created_by_email,
+        closed_at: p.closed_at,
+        created_at: p.created_at,
+      }))),
+    });
+  }
+
+  // =====================================================
+  // Payroll Exports in date range
+  // =====================================================
+  const { data: payrollExports } = await supabase
+    .from('payroll_exports')
+    .select('*, pay_periods(start_date, end_date)')
+    .eq('organisation_id', pack.organisation_id)
+    .gte('created_at', startDate)
+    .lte('created_at', endDate)
+    .order('created_at', { ascending: false });
+
+  if (payrollExports && payrollExports.length > 0) {
+    csvFiles.push({
+      name: 'payroll_exports.csv',
+      // deno-lint-ignore no-explicit-any
+      content: arrayToCSV(payrollExports.map((e: any) => {
+        const pp = e.pay_periods as { start_date: string; end_date: string } | null;
+        const summary = e.totals_summary || {};
+        return {
+          id: e.id,
+          pay_period: pp ? `${pp.start_date} to ${pp.end_date}` : 'Unknown',
+          provider: e.provider,
+          status: e.status,
+          total_hours: summary.totalHours || 0,
+          employees_count: summary.employeesCount || 0,
+          lines_count: summary.linesCount || 0,
+          created_by_name: e.created_by_name,
+          created_by_email: e.created_by_email,
+          created_at: e.created_at,
+          voided_at: e.voided_at,
+          voided_by_name: e.voided_by_name,
+          voided_reason: e.voided_reason,
+        };
+      })),
+    });
+  }
+
+  // =====================================================
+  // Timesheet Unlock Logs
+  // =====================================================
+  const { data: unlockLogs } = await supabase
+    .from('timesheet_unlock_log')
+    .select('*, timesheets(date, employees(first_name, last_name))')
+    .eq('organisation_id', pack.organisation_id)
+    .gte('unlocked_at', startDate)
+    .lte('unlocked_at', endDate)
+    .order('unlocked_at', { ascending: false });
+
+  if (unlockLogs && unlockLogs.length > 0) {
+    csvFiles.push({
+      name: 'timesheet_unlock_log.csv',
+      // deno-lint-ignore no-explicit-any
+      content: arrayToCSV(unlockLogs.map((u: any) => {
+        const ts = u.timesheets as { date: string; employees: { first_name: string; last_name: string } | null } | null;
+        return {
+          timesheet_date: ts?.date || 'Unknown',
+          employee_name: ts?.employees ? `${ts.employees.first_name} ${ts.employees.last_name}` : 'Unknown',
+          reason: u.reason,
+          unlocked_by_name: u.unlocked_by_name,
+          unlocked_by_email: u.unlocked_by_email,
+          unlocked_at: u.unlocked_at,
+        };
+      })),
+    });
+  }
+
+  // =====================================================
+  // Timesheets in date range
+  // =====================================================
   let timesheetsQuery = supabase
     .from('timesheets')
     .select('*, employees(first_name, last_name)')
@@ -618,6 +715,8 @@ async function generatePayrollPack(
           break_minutes: t.break_minutes,
           total_hours: t.total_hours,
           status: t.status,
+          is_locked: t.is_locked,
+          exported_at: t.exported_at,
           approved_at: t.approved_at,
           notes: t.notes,
         };
@@ -625,7 +724,9 @@ async function generatePayrollPack(
     });
   }
 
+  // =====================================================
   // Leave Requests
+  // =====================================================
   let leaveQuery = supabase
     .from('leave_requests')
     .select('*, employees(first_name, last_name), leave_types(name)')
@@ -664,7 +765,9 @@ async function generatePayrollPack(
     });
   }
 
+  // =====================================================
   // Leave Balances (current snapshot)
+  // =====================================================
   let balancesQuery = supabase
     .from('leave_balances')
     .select('*, employees(first_name, last_name), leave_types(name)')
@@ -694,7 +797,9 @@ async function generatePayrollPack(
     });
   }
 
+  // =====================================================
   // Leave Adjustments in period
+  // =====================================================
   let adjustmentsQuery = supabase
     .from('leave_adjustments')
     .select('*, employees(first_name, last_name), leave_types(name)')
@@ -729,12 +834,14 @@ async function generatePayrollPack(
     });
   }
 
-  // Timesheet audit logs
+  // =====================================================
+  // Payroll & Timesheet Audit Trail (expanded entity types)
+  // =====================================================
   const { data: auditLogs } = await supabase
     .from('audit_logs')
     .select('*')
     .eq('organisation_id', pack.organisation_id)
-    .in('entity_type', ['timesheet', 'leave_request'])
+    .in('entity_type', ['timesheet', 'leave_request', 'payroll_export', 'pay_period'])
     .gte('created_at', startDate)
     .lte('created_at', endDate)
     .order('created_at', { ascending: false });
@@ -756,18 +863,30 @@ async function generatePayrollPack(
     });
   }
 
+  // =====================================================
+  // Calculate Summary
+  // =====================================================
   // deno-lint-ignore no-explicit-any
   const tsApproved = timesheets?.filter((t: any) => t.status === 'approved').length || 0;
+  // deno-lint-ignore no-explicit-any
+  const tsExported = timesheets?.filter((t: any) => t.is_locked && t.exported_at).length || 0;
   // deno-lint-ignore no-explicit-any
   const tsPending = timesheets?.filter((t: any) => t.status === 'pending').length || 0;
   // deno-lint-ignore no-explicit-any
   const leaveApproved = leaveRequests?.filter((l: any) => l.status === 'approved').length || 0;
   // deno-lint-ignore no-explicit-any
   const leavePending = leaveRequests?.filter((l: any) => l.status === 'pending').length || 0;
+  // deno-lint-ignore no-explicit-any
+  const exportsVoided = payrollExports?.filter((e: any) => e.status === 'voided').length || 0;
 
   return {
+    pay_periods: payPeriods?.length || 0,
+    payroll_exports: payrollExports?.length || 0,
+    exports_voided: exportsVoided,
+    timesheet_unlocks: unlockLogs?.length || 0,
     total_timesheets: timesheets?.length || 0,
     timesheets_approved: tsApproved,
+    timesheets_exported: tsExported,
     timesheets_pending: tsPending,
     // deno-lint-ignore no-explicit-any
     total_timesheet_hours: timesheets?.reduce((sum: number, t: any) => sum + (t.total_hours || 0), 0).toFixed(2),

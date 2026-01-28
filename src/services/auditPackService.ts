@@ -143,6 +143,22 @@ class AuditPackService {
 
         const { count: timesheetCount } = await timesheetsQuery;
         estimatedRecords.timesheets = timesheetCount || 0;
+
+        // Count pay periods overlapping with date range
+        const { count: payPeriodCount } = await supabase
+          .from('pay_periods')
+          .select('*', { count: 'exact', head: true })
+          .eq('organisation_id', organisationId);
+        estimatedRecords.payPeriods = payPeriodCount || 0;
+
+        // Count payroll exports in date range
+        const { count: exportCount } = await supabase
+          .from('payroll_exports')
+          .select('*', { count: 'exact', head: true })
+          .eq('organisation_id', organisationId)
+          .gte('created_at', startDate)
+          .lte('created_at', endDate);
+        estimatedRecords.payrollExports = exportCount || 0;
         break;
     }
 
