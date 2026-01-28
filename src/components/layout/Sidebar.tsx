@@ -53,6 +53,7 @@ const portalNavItems: NavItem[] = [
   { label: 'My Documents', icon: FolderOpen, href: '/portal/documents', moduleKey: 'portal-documents' },
   { label: 'My Training', icon: GraduationCap, href: '/portal/training', moduleKey: 'portal-training' },
   { label: 'My Reviews', icon: Star, href: '/portal/reviews', moduleKey: 'portal-reviews' },
+  { label: 'My Goals', icon: Target, href: '/portal/goals', moduleKey: 'portal-goals' },
   { label: 'My Profile', icon: User, href: '/portal/profile', moduleKey: 'portal-profile' },
 ];
 

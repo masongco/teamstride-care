@@ -24,6 +24,7 @@ import MyDocuments from "./pages/portal/MyDocuments";
 import MyTraining from "./pages/portal/MyTraining";
 import MyProfile from "./pages/portal/MyProfile";
 import MyReviews from "./pages/portal/MyReviews";
+import MyGoals from "./pages/portal/MyGoals";
 // LMS Admin pages
 import LMSAdmin from "./pages/lms/LMSAdmin";
 import CourseBuilder from "./pages/lms/CourseBuilder";
@@ -212,7 +213,14 @@ const App = () => (
               </ProtectedPageWithLayout>
             }
           />
-          {/* LMS Admin Routes */}
+          <Route
+            path="/portal/goals"
+            element={
+              <ProtectedPageWithLayout>
+                <MyGoals />
+              </ProtectedPageWithLayout>
+            }
+          />
           <Route
             path="/lms"
             element={
