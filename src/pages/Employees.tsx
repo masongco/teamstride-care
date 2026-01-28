@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +40,20 @@ const employmentTypeColors: Record<EmploymentType, string> = {
   contractor: 'bg-warning/10 text-warning',
 };
 
+const EMPLOYEES_STORAGE_KEY = 'hrms_employees';
+
+const getInitialEmployees = (): Employee[] => {
+  const stored = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return mockEmployees;
+    }
+  }
+  return mockEmployees;
+};
+
 export default function Employees() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
@@ -47,7 +61,12 @@ export default function Employees() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [employees, setEmployees] = useState(mockEmployees);
+  const [employees, setEmployees] = useState<Employee[]>(getInitialEmployees);
+
+  // Persist employees to localStorage whenever they change
+  React.useEffect(() => {
+    localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(employees));
+  }, [employees]);
 
   const filteredEmployees = employees.filter((employee) => {
     // Always exclude inactive/deactivated employees from the employee section
