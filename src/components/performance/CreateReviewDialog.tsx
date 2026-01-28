@@ -32,11 +32,8 @@ import { CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { usePerformanceReviews } from '@/hooks/usePerformance';
-import { mockEmployees } from '@/lib/mock-data';
+import { useEmployees } from '@/hooks/useEmployees';
 import type { ReviewType } from '@/types/performance';
-
-// Get only active employees for selection
-const activeEmployees = mockEmployees.filter(e => e.status === 'active');
 
 const reviewSchema = z.object({
   employee_id: z.string().min(1, 'Please select an employee'),
@@ -56,6 +53,7 @@ interface CreateReviewDialogProps {
 export function CreateReviewDialog({ open, onOpenChange }: CreateReviewDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { createReview } = usePerformanceReviews();
+  const { activeEmployees } = useEmployees();
 
   const form = useForm<ReviewFormValues>({
     resolver: zodResolver(reviewSchema),

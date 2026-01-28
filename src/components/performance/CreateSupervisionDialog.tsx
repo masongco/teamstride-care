@@ -33,10 +33,7 @@ import { CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useSupervisions } from '@/hooks/usePerformance';
-import { mockEmployees } from '@/lib/mock-data';
-
-// Get only active employees for selection
-const activeEmployees = mockEmployees.filter(e => e.status === 'active');
+import { useEmployees } from '@/hooks/useEmployees';
 
 const supervisionSchema = z.object({
   employee_id: z.string().min(1, 'Please select an employee'),
@@ -55,6 +52,7 @@ interface CreateSupervisionDialogProps {
 export function CreateSupervisionDialog({ open, onOpenChange }: CreateSupervisionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { createSupervision } = useSupervisions();
+  const { activeEmployees } = useEmployees();
 
   const form = useForm<SupervisionFormValues>({
     resolver: zodResolver(supervisionSchema),

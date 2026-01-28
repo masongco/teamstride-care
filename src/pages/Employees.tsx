@@ -42,7 +42,7 @@ const employmentTypeColors: Record<EmploymentType, string> = {
   contractor: 'bg-warning/10 text-warning',
 };
 
-const EMPLOYEES_STORAGE_KEY = 'hrms_employees';
+import { EMPLOYEES_STORAGE_KEY } from '@/hooks/useEmployees';
 
 const getInitialEmployees = (): Employee[] => {
   const stored = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
@@ -69,6 +69,8 @@ export default function Employees() {
   // Persist employees to localStorage whenever they change
   React.useEffect(() => {
     localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(employees));
+    // Dispatch custom event to notify other components
+    window.dispatchEvent(new Event('employees-updated'));
   }, [employees]);
 
   const filteredEmployees = employees.filter((employee) => {
