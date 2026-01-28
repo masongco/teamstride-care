@@ -39,6 +39,7 @@ import PlansList from "./pages/platform/PlansList";
 import PlatformUsers from "./pages/platform/PlatformUsers";
 import AuditLogs from "./pages/platform/AuditLogs";
 import PlatformSettings from "./pages/platform/PlatformSettings";
+import AuditExports from "./pages/AuditExports";
 
 const queryClient = new QueryClient();
 
@@ -165,6 +166,14 @@ const App = () => (
             element={
               <ProtectedPageWithLayout>
                 <HRCases />
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/audit-exports"
+            element={
+              <ProtectedPageWithLayout>
+                <AuditExports />
               </ProtectedPageWithLayout>
             }
           />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
@@ -20,6 +20,8 @@ import {
   User,
   Star,
   BookOpen,
+  AlertTriangle,
+  FileArchive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -43,8 +45,10 @@ const allNavItems: NavItem[] = [
   { label: 'Documents', icon: FileText, href: '/documents', moduleKey: 'documents' },
   { label: 'Contracts', icon: ClipboardList, href: '/contracts', moduleKey: 'contracts' },
   { label: 'Performance', icon: Target, href: '/performance', moduleKey: 'performance' },
+  { label: 'HR Cases', icon: AlertTriangle, href: '/hr-cases', moduleKey: 'hr-cases' },
   { label: 'LMS Admin', icon: BookOpen, href: '/lms', moduleKey: 'lms' },
   { label: 'Payroll', icon: DollarSign, href: '/payroll', moduleKey: 'payroll' },
+  { label: 'Audit & Exports', icon: FileArchive, href: '/audit-exports', moduleKey: 'audit-exports' },
   { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports' },
 ];
 
