@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          ip_address: string | null
+          new_values: Json | null
+          old_values: Json | null
+          user_agent: string | null
+          user_email: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: []
+      }
       award_classifications: {
         Row: {
           base_hourly_rate: number
@@ -137,6 +182,44 @@ export type Database = {
           },
         ]
       }
+      compliance_rules: {
+        Row: {
+          created_at: string
+          document_type_id: string
+          id: string
+          is_required: boolean | null
+          target_type: Database["public"]["Enums"]["assignment_target_type"]
+          target_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document_type_id: string
+          id?: string
+          is_required?: boolean | null
+          target_type: Database["public"]["Enums"]["assignment_target_type"]
+          target_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document_type_id?: string
+          id?: string
+          is_required?: boolean | null
+          target_type?: Database["public"]["Enums"]["assignment_target_type"]
+          target_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_rules_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_audit_log: {
         Row: {
           action: string
@@ -241,6 +324,157 @@ export type Database = {
         }
         Relationships: []
       }
+      course_assignments: {
+        Row: {
+          assigned_by: string | null
+          assigned_by_name: string | null
+          auto_assign_on_hire: boolean | null
+          course_id: string
+          created_at: string
+          due_date: string | null
+          id: string
+          is_mandatory: boolean | null
+          notes: string | null
+          recurrence: Database["public"]["Enums"]["recurrence_type"] | null
+          target_type: Database["public"]["Enums"]["assignment_target_type"]
+          target_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          assigned_by_name?: string | null
+          auto_assign_on_hire?: boolean | null
+          course_id: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          is_mandatory?: boolean | null
+          notes?: string | null
+          recurrence?: Database["public"]["Enums"]["recurrence_type"] | null
+          target_type: Database["public"]["Enums"]["assignment_target_type"]
+          target_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_by?: string | null
+          assigned_by_name?: string | null
+          auto_assign_on_hire?: boolean | null
+          course_id?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          is_mandatory?: boolean | null
+          notes?: string | null
+          recurrence?: Database["public"]["Enums"]["recurrence_type"] | null
+          target_type?: Database["public"]["Enums"]["assignment_target_type"]
+          target_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_assignments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_modules: {
+        Row: {
+          content_text: string | null
+          content_url: string | null
+          course_id: string
+          created_at: string
+          description: string | null
+          display_order: number | null
+          duration_minutes: number | null
+          id: string
+          is_required: boolean | null
+          module_type: Database["public"]["Enums"]["module_type"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content_text?: string | null
+          content_url?: string | null
+          course_id: string
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          duration_minutes?: number | null
+          id?: string
+          is_required?: boolean | null
+          module_type: Database["public"]["Enums"]["module_type"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content_text?: string | null
+          content_url?: string | null
+          course_id?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          duration_minutes?: number | null
+          id?: string
+          is_required?: boolean | null
+          module_type?: Database["public"]["Enums"]["module_type"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_modules_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      courses: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          estimated_duration_minutes: number | null
+          id: string
+          is_active: boolean | null
+          is_published: boolean | null
+          pass_mark: number | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          estimated_duration_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_published?: boolean | null
+          pass_mark?: number | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          estimated_duration_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_published?: boolean | null
+          pass_mark?: number | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
           created_at: string
@@ -262,6 +496,258 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      document_reviews: {
+        Row: {
+          action: Database["public"]["Enums"]["document_status"]
+          comments: string | null
+          created_at: string
+          document_id: string
+          id: string
+          reviewer_email: string
+          reviewer_id: string
+          reviewer_name: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["document_status"]
+          comments?: string | null
+          created_at?: string
+          document_id: string
+          id?: string
+          reviewer_email: string
+          reviewer_id: string
+          reviewer_name: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["document_status"]
+          comments?: string | null
+          created_at?: string
+          document_id?: string
+          id?: string
+          reviewer_email?: string
+          reviewer_id?: string
+          reviewer_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_reviews_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "employee_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_types: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          is_required: boolean | null
+          name: string
+          updated_at: string
+          validity_months: number | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_required?: boolean | null
+          name: string
+          updated_at?: string
+          validity_months?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_required?: boolean | null
+          name?: string
+          updated_at?: string
+          validity_months?: number | null
+        }
+        Relationships: []
+      }
+      document_versions: {
+        Row: {
+          created_at: string
+          document_id: string
+          file_name: string
+          file_url: string
+          id: string
+          uploaded_by: string
+          version_number: number
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          file_name: string
+          file_url: string
+          id?: string
+          uploaded_by: string
+          version_number: number
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          uploaded_by?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_versions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "employee_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_documents: {
+        Row: {
+          created_at: string
+          current_version: number | null
+          document_type_id: string
+          expiry_date: string | null
+          file_name: string
+          file_url: string
+          id: string
+          issue_date: string | null
+          status: Database["public"]["Enums"]["document_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_version?: number | null
+          document_type_id: string
+          expiry_date?: string | null
+          file_name: string
+          file_url: string
+          id?: string
+          issue_date?: string | null
+          status?: Database["public"]["Enums"]["document_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_version?: number | null
+          document_type_id?: string
+          expiry_date?: string | null
+          file_name?: string
+          file_url?: string
+          id?: string
+          issue_date?: string | null
+          status?: Database["public"]["Enums"]["document_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      module_completions: {
+        Row: {
+          completed_at: string
+          created_at: string
+          id: string
+          module_id: string
+          policy_acknowledged_at: string | null
+          time_spent_seconds: number | null
+          user_assignment_id: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          created_at?: string
+          id?: string
+          module_id: string
+          policy_acknowledged_at?: string | null
+          time_spent_seconds?: number | null
+          user_assignment_id?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          created_at?: string
+          id?: string
+          module_id?: string
+          policy_acknowledged_at?: string | null
+          time_spent_seconds?: number | null
+          user_assignment_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_completions_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "course_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_completions_user_assignment_id_fkey"
+            columns: ["user_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "user_course_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          is_read: boolean | null
+          link: string | null
+          message: string
+          read_at: string | null
+          title: string
+          type: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          link?: string | null
+          message: string
+          read_at?: string | null
+          title: string
+          type?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          link?: string | null
+          message?: string
+          read_at?: string | null
+          title?: string
+          type?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -395,6 +881,119 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      quiz_attempts: {
+        Row: {
+          answers: Json | null
+          attempt_number: number | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          max_score: number | null
+          module_id: string
+          passed: boolean | null
+          percentage: number | null
+          score: number | null
+          started_at: string
+          time_spent_seconds: number | null
+          user_assignment_id: string | null
+          user_id: string
+        }
+        Insert: {
+          answers?: Json | null
+          attempt_number?: number | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          max_score?: number | null
+          module_id: string
+          passed?: boolean | null
+          percentage?: number | null
+          score?: number | null
+          started_at?: string
+          time_spent_seconds?: number | null
+          user_assignment_id?: string | null
+          user_id: string
+        }
+        Update: {
+          answers?: Json | null
+          attempt_number?: number | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          max_score?: number | null
+          module_id?: string
+          passed?: boolean | null
+          percentage?: number | null
+          score?: number | null
+          started_at?: string
+          time_spent_seconds?: number | null
+          user_assignment_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "course_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_attempts_user_assignment_id_fkey"
+            columns: ["user_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "user_course_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_questions: {
+        Row: {
+          created_at: string
+          display_order: number | null
+          explanation: string | null
+          id: string
+          module_id: string
+          options: Json
+          points: number | null
+          question_text: string
+          question_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number | null
+          explanation?: string | null
+          id?: string
+          module_id: string
+          options?: Json
+          points?: number | null
+          question_text: string
+          question_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number | null
+          explanation?: string | null
+          id?: string
+          module_id?: string
+          options?: Json
+          points?: number | null
+          question_text?: string
+          question_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_questions_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "course_modules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       review_feedback: {
         Row: {
@@ -680,6 +1279,63 @@ export type Database = {
         }
         Relationships: []
       }
+      user_course_assignments: {
+        Row: {
+          assignment_id: string | null
+          completed_at: string | null
+          course_id: string
+          created_at: string
+          due_date: string | null
+          id: string
+          progress_percentage: number | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["assignment_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          completed_at?: string | null
+          course_id: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          progress_percentage?: number | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["assignment_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assignment_id?: string | null
+          completed_at?: string | null
+          course_id?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          progress_percentage?: number | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["assignment_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_course_assignments_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "course_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_course_assignments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -723,13 +1379,24 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "manager" | "employee"
+      assignment_status: "assigned" | "in_progress" | "completed" | "overdue"
+      assignment_target_type:
+        | "individual"
+        | "team"
+        | "role"
+        | "department"
+        | "location"
+        | "all"
       contract_status:
         | "draft"
         | "pending_signature"
         | "signed"
         | "expired"
         | "voided"
+      document_status: "pending" | "approved" | "rejected" | "expired"
       feedback_type: "self" | "manager" | "peer" | "direct_report"
+      module_type: "video" | "pdf" | "policy" | "quiz"
+      recurrence_type: "none" | "annual" | "biannual" | "quarterly" | "monthly"
       review_status: "draft" | "in_progress" | "pending_approval" | "completed"
       review_type: "performance" | "annual" | "probation"
     }
@@ -860,6 +1527,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "manager", "employee"],
+      assignment_status: ["assigned", "in_progress", "completed", "overdue"],
+      assignment_target_type: [
+        "individual",
+        "team",
+        "role",
+        "department",
+        "location",
+        "all",
+      ],
       contract_status: [
         "draft",
         "pending_signature",
@@ -867,7 +1543,10 @@ export const Constants = {
         "expired",
         "voided",
       ],
+      document_status: ["pending", "approved", "rejected", "expired"],
       feedback_type: ["self", "manager", "peer", "direct_report"],
+      module_type: ["video", "pdf", "policy", "quiz"],
+      recurrence_type: ["none", "annual", "biannual", "quarterly", "monthly"],
       review_status: ["draft", "in_progress", "pending_approval", "completed"],
       review_type: ["performance", "annual", "probation"],
     },
