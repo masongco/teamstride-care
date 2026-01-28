@@ -18,7 +18,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
@@ -27,12 +33,14 @@ import { CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useSupervisions } from '@/hooks/usePerformance';
+import { mockEmployees } from '@/lib/mock-data';
+
+// Get only active employees for selection
+const activeEmployees = mockEmployees.filter(e => e.status === 'active');
 
 const supervisionSchema = z.object({
-  supervisor_name: z.string().min(1, 'Supervisor name is required').max(100),
-  supervisor_email: z.string().email('Invalid email address'),
-  employee_name: z.string().min(1, 'Employee name is required').max(100),
-  employee_email: z.string().email('Invalid email address'),
+  employee_id: z.string().min(1, 'Please select an employee'),
+  supervisor_id: z.string().min(1, 'Please select a supervisor'),
   start_date: z.date({ required_error: 'Start date is required' }),
   notes: z.string().max(500).optional(),
 });
@@ -51,22 +59,25 @@ export function CreateSupervisionDialog({ open, onOpenChange }: CreateSupervisio
   const form = useForm<SupervisionFormValues>({
     resolver: zodResolver(supervisionSchema),
     defaultValues: {
-      supervisor_name: '',
-      supervisor_email: '',
-      employee_name: '',
-      employee_email: '',
+      employee_id: '',
+      supervisor_id: '',
       notes: '',
     },
   });
 
   const onSubmit = async (values: SupervisionFormValues) => {
+    const employee = activeEmployees.find(e => e.id === values.employee_id);
+    const supervisor = activeEmployees.find(e => e.id === values.supervisor_id);
+    
+    if (!employee || !supervisor) return;
+
     setIsSubmitting(true);
     try {
       await createSupervision({
-        supervisor_name: values.supervisor_name,
-        supervisor_email: values.supervisor_email,
-        employee_name: values.employee_name,
-        employee_email: values.employee_email,
+        supervisor_name: `${supervisor.firstName} ${supervisor.lastName}`,
+        supervisor_email: supervisor.email,
+        employee_name: `${employee.firstName} ${employee.lastName}`,
+        employee_email: employee.email,
         start_date: format(values.start_date, 'yyyy-MM-dd'),
         end_date: null,
         is_active: true,
@@ -78,6 +89,9 @@ export function CreateSupervisionDialog({ open, onOpenChange }: CreateSupervisio
       setIsSubmitting(false);
     }
   };
+
+  const selectedEmployeeId = form.watch('employee_id');
+  const selectedSupervisorId = form.watch('supervisor_id');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,63 +105,59 @@ export function CreateSupervisionDialog({ open, onOpenChange }: CreateSupervisio
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="employee_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Employee Name</FormLabel>
+            <FormField
+              control={form.control}
+              name="employee_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Employee</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <Input placeholder="John Smith" {...field} />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an employee" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="employee_email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Employee Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="john@example.com" type="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                    <SelectContent>
+                      {activeEmployees
+                        .filter(e => e.id !== selectedSupervisorId)
+                        .map((employee) => (
+                          <SelectItem key={employee.id} value={employee.id}>
+                            {employee.firstName} {employee.lastName} - {employee.position}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="supervisor_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Supervisor Name</FormLabel>
+            <FormField
+              control={form.control}
+              name="supervisor_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Supervisor</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <Input placeholder="Jane Doe" {...field} />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a supervisor" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="supervisor_email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Supervisor Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="jane@example.com" type="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                    <SelectContent>
+                      {activeEmployees
+                        .filter(e => e.id !== selectedEmployeeId)
+                        .map((employee) => (
+                          <SelectItem key={employee.id} value={employee.id}>
+                            {employee.firstName} {employee.lastName} - {employee.position}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
