@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { notifyReviewAssigned, notifyReviewStatusChange, notifyFeedbackRequested } from '@/services/notificationService';
 import type { 
   Supervision, 
   SupervisionSession, 
@@ -309,6 +310,16 @@ export function usePerformanceReviews() {
       if (error) throw error;
       setReviews(prev => [data, ...prev]);
       toast({ title: 'Review created' });
+
+      // Send notification to the employee
+      await notifyReviewAssigned({
+        employeeEmail: data.employee_email,
+        employeeName: data.employee_name,
+        reviewerName: data.reviewer_name,
+        reviewType: data.review_type,
+        reviewId: data.id,
+      });
+
       return data;
     } catch (error: any) {
       toast({
@@ -332,6 +343,17 @@ export function usePerformanceReviews() {
       if (error) throw error;
       setReviews(prev => prev.map(r => r.id === id ? data : r));
       toast({ title: 'Review updated' });
+
+      // Notify employee if status changed
+      if (updates.status) {
+        await notifyReviewStatusChange({
+          employeeEmail: data.employee_email,
+          employeeName: data.employee_name,
+          status: data.status,
+          reviewId: data.id,
+        });
+      }
+
       return data;
     } catch (error: any) {
       toast({
@@ -404,7 +426,7 @@ export function useReviewFeedback(reviewId?: string) {
     }
   }, [reviewId, toast]);
 
-  const requestFeedback = async (feedbackRequest: Omit<ReviewFeedback, 'id' | 'created_at' | 'updated_at'>) => {
+  const requestFeedback = async (feedbackRequest: Omit<ReviewFeedback, 'id' | 'created_at' | 'updated_at'>, employeeName?: string) => {
     try {
       const { data, error } = await supabase
         .from('review_feedback')
@@ -416,6 +438,17 @@ export function useReviewFeedback(reviewId?: string) {
       if (error) throw error;
       setFeedback(prev => [data, ...prev]);
       toast({ title: 'Feedback request sent' });
+
+      // Notify the responder about the feedback request
+      if (employeeName) {
+        await notifyFeedbackRequested({
+          responderEmail: data.responder_email,
+          responderName: data.responder_name,
+          employeeName,
+          reviewId: data.review_id,
+        });
+      }
+
       return data;
     } catch (error: any) {
       toast({
