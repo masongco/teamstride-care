@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { UserPlus } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { UserPlus, Upload, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from '@/hooks/use-toast';
 import { employeeSchema, type EmployeeFormData } from '@/lib/validation-schemas';
 import { useQuery } from '@tanstack/react-query';
@@ -35,6 +36,7 @@ interface AddEmployeeDialogProps {
     department: string;
     employmentType: string;
     payRate: number;
+    avatar?: string;
   }) => void;
 }
 
@@ -52,6 +54,10 @@ const initialFormData: EmployeeFormData = {
 export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDialogProps) {
   const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
   const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch departments from Supabase
   const { data: departments = [] } = useQuery({
@@ -87,6 +93,62 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
       })
     : positions;
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: 'File too large',
+          description: 'Please select an image under 5MB',
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: 'Invalid file type',
+          description: 'Please select an image file',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removeAvatar = () => {
+    setAvatarFile(null);
+    if (avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+      setAvatarPreview(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const uploadAvatar = async (): Promise<string | null> => {
+    if (!avatarFile) return null;
+    
+    const fileExt = avatarFile.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    
+    const { error } = await supabase.storage
+      .from('employee-avatars')
+      .upload(fileName, avatarFile);
+    
+    if (error) {
+      console.error('Upload error:', error);
+      throw error;
+    }
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from('employee-avatars')
+      .getPublicUrl(fileName);
+    
+    return publicUrl;
+  };
   const validateForm = (): boolean => {
     const result = employeeSchema.safeParse(formData);
     
@@ -106,7 +168,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
     return true;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateForm()) {
       toast({
         title: 'Validation Error',
@@ -116,26 +178,46 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
       return;
     }
 
-    onAdd({
-      firstName: formData.firstName.trim(),
-      lastName: formData.lastName.trim(),
-      email: formData.email.trim(),
-      phone: formData.phone?.trim() || '',
-      position: formData.position.trim(),
-      department: formData.department?.trim() || '',
-      employmentType: formData.employmentType,
-      payRate: formData.payRate ? parseFloat(formData.payRate) : 0,
-    });
+    setUploading(true);
+    try {
+      let avatarUrl: string | undefined;
+      
+      if (avatarFile) {
+        avatarUrl = await uploadAvatar() || undefined;
+      }
 
-    // Reset form
-    setFormData(initialFormData);
-    setErrors({});
-    onOpenChange(false);
-    
-    toast({
-      title: 'Employee Added',
-      description: `${formData.firstName} ${formData.lastName} has been added to the system.`,
-    });
+      onAdd({
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone?.trim() || '',
+        position: formData.position.trim(),
+        department: formData.department?.trim() || '',
+        employmentType: formData.employmentType,
+        payRate: formData.payRate ? parseFloat(formData.payRate) : 0,
+        avatar: avatarUrl,
+      });
+
+      // Reset form
+      setFormData(initialFormData);
+      setErrors({});
+      removeAvatar();
+      onOpenChange(false);
+      
+      toast({
+        title: 'Employee Added',
+        description: `${formData.firstName} ${formData.lastName} has been added to the system.`,
+      });
+    } catch (error) {
+      console.error('Error adding employee:', error);
+      toast({
+        title: 'Upload Error',
+        description: 'Failed to upload employee photo. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleFieldChange = (field: keyof EmployeeFormData, value: string) => {
@@ -160,6 +242,53 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Photo Upload */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <Avatar className="h-24 w-24">
+                {avatarPreview ? (
+                  <AvatarImage src={avatarPreview} alt="Employee photo" />
+                ) : (
+                  <AvatarFallback className="bg-muted text-muted-foreground text-2xl">
+                    {formData.firstName?.[0]?.toUpperCase() || '?'}
+                    {formData.lastName?.[0]?.toUpperCase() || ''}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              {avatarPreview && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                  onClick={removeAvatar}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {avatarPreview ? 'Change Photo' : 'Upload Photo'}
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Personal Information */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Personal Information</h3>
@@ -321,11 +450,11 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
 
           {/* Actions */}
           <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1" disabled={uploading}>
               Cancel
             </Button>
-            <Button className="flex-1 gradient-primary" onClick={handleSubmit}>
-              Add Employee
+            <Button className="flex-1 gradient-primary" onClick={handleSubmit} disabled={uploading}>
+              {uploading ? 'Adding...' : 'Add Employee'}
             </Button>
           </div>
         </div>
