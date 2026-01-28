@@ -14,6 +14,7 @@ import Compliance from "./pages/Compliance";
 import Leave from "./pages/Leave";
 import Recruitment from "./pages/Recruitment";
 import Contracts from "./pages/Contracts";
+import Documents from "./pages/Documents";
 import Payroll from "./pages/Payroll";
 import Performance from "./pages/Performance";
 import Settings from "./pages/Settings";
@@ -103,10 +104,7 @@ const App = () => (
             path="/documents"
             element={
               <ProtectedPageWithLayout>
-                <div className="text-center py-12">
-                  <h1 className="text-2xl font-bold">Documents</h1>
-                  <p className="text-muted-foreground mt-2">Coming soon...</p>
-                </div>
+                <Documents />
               </ProtectedPageWithLayout>
             }
           />
