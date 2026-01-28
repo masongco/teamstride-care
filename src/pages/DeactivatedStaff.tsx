@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, UserX, RotateCcw, ArrowLeft } from 'lucide-react';
+import { Search, UserX, RotateCcw, ArrowLeft, ShieldAlert, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,7 @@ import { Employee, EmploymentType } from '@/types/hrms';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
+import { useUserRole } from '@/hooks/useUserRole';
 
 const EMPLOYEES_STORAGE_KEY = 'hrms_employees';
 
@@ -57,6 +58,7 @@ const getStoredEmployees = (): Employee[] => {
 };
 
 export default function DeactivatedStaff() {
+  const { isManager, loading: roleLoading } = useUserRole();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [employees, setEmployees] = useState<Employee[]>(getStoredEmployees);
@@ -74,6 +76,38 @@ export default function DeactivatedStaff() {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  // Show loading state while checking permissions
+  if (roleLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show access denied if not admin or manager
+  if (!isManager) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <ShieldAlert className="h-12 w-12 mx-auto text-destructive mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+            <p className="text-muted-foreground mb-4">
+              Only administrators and managers can view the deactivated staff archive.
+            </p>
+            <Button variant="outline" asChild>
+              <Link to="/employees">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Employees
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const deactivatedEmployees = employees.filter((employee) => {
     if (employee.status !== 'inactive') return false;

@@ -26,6 +26,7 @@ import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog';
 import { EmployeeDetailSheet } from '@/components/employees/EmployeeDetailSheet';
 import { toast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
+import { useUserRole } from '@/hooks/useUserRole';
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
   casual: 'Casual',
@@ -56,6 +57,7 @@ const getInitialEmployees = (): Employee[] => {
 };
 
 export default function Employees() {
+  const { isManager } = useUserRole();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('active');
@@ -150,12 +152,14 @@ export default function Employees() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link to="/employees/deactivated">
-              <UserX className="h-4 w-4 mr-2" />
-              Deactivated
-            </Link>
-          </Button>
+          {isManager && (
+            <Button variant="outline" asChild>
+              <Link to="/employees/deactivated">
+                <UserX className="h-4 w-4 mr-2" />
+                Deactivated
+              </Link>
+            </Button>
+          )}
           <Button variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Export
