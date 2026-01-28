@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
+import DeactivatedStaff from "./pages/DeactivatedStaff";
 import Compliance from "./pages/Compliance";
 import Leave from "./pages/Leave";
 import Recruitment from "./pages/Recruitment";
@@ -40,6 +41,14 @@ const App = () => (
             element={
               <ProtectedPageWithLayout>
                 <Employees />
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/employees/deactivated"
+            element={
+              <ProtectedPageWithLayout>
+                <DeactivatedStaff />
               </ProtectedPageWithLayout>
             }
           />

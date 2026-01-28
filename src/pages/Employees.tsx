@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Download } from 'lucide-react';
+import { Search, Filter, Plus, MoreHorizontal, Mail, Phone, Download, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog';
 import { EmployeeDetailSheet } from '@/components/employees/EmployeeDetailSheet';
 import { toast } from '@/hooks/use-toast';
+import { Link } from 'react-router-dom';
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
   casual: 'Casual',
@@ -149,6 +150,12 @@ export default function Employees() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/employees/deactivated">
+              <UserX className="h-4 w-4 mr-2" />
+              Deactivated
+            </Link>
+          </Button>
           <Button variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Export
