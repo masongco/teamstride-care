@@ -18,6 +18,16 @@ import Payroll from "./pages/Payroll";
 import Performance from "./pages/Performance";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+// Portal pages
+import PortalDashboard from "./pages/portal/PortalDashboard";
+import MyDocuments from "./pages/portal/MyDocuments";
+import MyTraining from "./pages/portal/MyTraining";
+import MyProfile from "./pages/portal/MyProfile";
+import MyReviews from "./pages/portal/MyReviews";
+// LMS Admin pages
+import LMSAdmin from "./pages/lms/LMSAdmin";
+import CourseBuilder from "./pages/lms/CourseBuilder";
+import AssignmentManager from "./pages/lms/AssignmentManager";
 
 const queryClient = new QueryClient();
 
@@ -158,6 +168,72 @@ const App = () => (
                   <h1 className="text-2xl font-bold">Help Center</h1>
                   <p className="text-muted-foreground mt-2">Coming soon...</p>
                 </div>
+              </ProtectedPageWithLayout>
+            }
+          />
+          {/* Employee Portal Routes */}
+          <Route
+            path="/portal"
+            element={
+              <ProtectedPageWithLayout>
+                <PortalDashboard />
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/portal/documents"
+            element={
+              <ProtectedPageWithLayout>
+                <MyDocuments />
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/portal/training"
+            element={
+              <ProtectedPageWithLayout>
+                <MyTraining />
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/portal/profile"
+            element={
+              <ProtectedPageWithLayout>
+                <MyProfile />
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/portal/reviews"
+            element={
+              <ProtectedPageWithLayout>
+                <MyReviews />
+              </ProtectedPageWithLayout>
+            }
+          />
+          {/* LMS Admin Routes */}
+          <Route
+            path="/lms"
+            element={
+              <ProtectedPageWithLayout>
+                <LMSAdmin />
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/lms/course/:courseId"
+            element={
+              <ProtectedPageWithLayout>
+                <CourseBuilder />
+              </ProtectedPageWithLayout>
+            }
+          />
+          <Route
+            path="/lms/assignments"
+            element={
+              <ProtectedPageWithLayout>
+                <AssignmentManager />
               </ProtectedPageWithLayout>
             }
           />
