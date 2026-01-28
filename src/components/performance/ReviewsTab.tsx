@@ -15,13 +15,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, MoreHorizontal, Calendar, Star, ClipboardCheck, Loader2, Eye, Users } from 'lucide-react';
+import { Plus, MoreHorizontal, Calendar, Star, ClipboardCheck, Loader2, Eye, Users, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { usePerformanceReviews } from '@/hooks/usePerformance';
 import { CreateReviewDialog } from './CreateReviewDialog';
 import { ReviewDetailSheet } from './ReviewDetailSheet';
+import { PerformanceReportDialog } from './PerformanceReportDialog';
 import type { PerformanceReview, ReviewStatus } from '@/types/performance';
 
 interface ReviewsTabProps {
@@ -46,6 +48,8 @@ export function ReviewsTab({ searchQuery }: ReviewsTabProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedReview, setSelectedReview] = useState<PerformanceReview | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportEmployee, setReportEmployee] = useState<{ name: string; email: string } | null>(null);
 
   const filteredReviews = reviews.filter(r => 
     r.employee_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -55,6 +59,11 @@ export function ReviewsTab({ searchQuery }: ReviewsTabProps) {
   const handleViewReview = (review: PerformanceReview) => {
     setSelectedReview(review);
     setDetailOpen(true);
+  };
+
+  const handleViewReport = (review: PerformanceReview) => {
+    setReportEmployee({ name: review.employee_name, email: review.employee_email });
+    setReportOpen(true);
   };
 
   if (loading) {
@@ -160,10 +169,15 @@ export function ReviewsTab({ searchQuery }: ReviewsTabProps) {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewReport(review)}>
+                            <FileText className="h-4 w-4 mr-2" />
+                            View Full Report
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleViewReview(review)}>
                             <Users className="h-4 w-4 mr-2" />
                             Request 360 Feedback
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           {review.status === 'draft' && (
                             <DropdownMenuItem 
                               onClick={() => updateReview(review.id, { status: 'in_progress' })}
@@ -188,6 +202,7 @@ export function ReviewsTab({ searchQuery }: ReviewsTabProps) {
                               Mark Complete
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem 
                             onClick={() => deleteReview(review.id)}
                             className="text-destructive"
@@ -212,6 +227,15 @@ export function ReviewsTab({ searchQuery }: ReviewsTabProps) {
           open={detailOpen} 
           onOpenChange={setDetailOpen}
           review={selectedReview}
+        />
+      )}
+
+      {reportEmployee && (
+        <PerformanceReportDialog
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          employeeName={reportEmployee.name}
+          employeeEmail={reportEmployee.email}
         />
       )}
     </>

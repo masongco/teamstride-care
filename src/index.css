@@ -255,3 +255,80 @@
     }
   }
 }
+
+/* Print Styles */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: white !important;
+  }
+  
+  /* Hide everything except the print-report content */
+  body > *:not([data-radix-portal]) {
+    display: none !important;
+  }
+  
+  [data-radix-portal] {
+    position: static !important;
+  }
+  
+  [data-radix-portal] > [role="dialog"] {
+    position: static !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+  
+  .print-report {
+    display: block !important;
+    padding: 20px !important;
+    background: white !important;
+  }
+  
+  .print\\:hidden {
+    display: none !important;
+  }
+  
+  .print\\:block {
+    display: block !important;
+  }
+  
+  .print\\:break-inside-avoid {
+    break-inside: avoid !important;
+  }
+  
+  /* Ensure borders and backgrounds print */
+  .border,
+  [class*="rounded"] {
+    border-color: #e5e7eb !important;
+  }
+  
+  [class*="bg-"] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Progress bars print correctly */
+  .bg-primary {
+    background-color: hsl(166 84% 32%) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Page breaks */
+  h2 {
+    page-break-after: avoid;
+  }
+  
+  section {
+    page-break-inside: avoid;
+  }
+}
