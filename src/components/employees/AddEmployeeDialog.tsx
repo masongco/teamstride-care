@@ -203,11 +203,7 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
       setErrors({});
       removeAvatar();
       onOpenChange(false);
-      
-      toast({
-        title: 'Employee Added',
-        description: `${formData.firstName} ${formData.lastName} has been added to the system.`,
-      });
+      // Note: Toast is shown by useSupabaseEmployees hook
     } catch (error) {
       console.error('Error adding employee:', error);
       toast({

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Database } from '@/integrations/supabase/types';
@@ -11,41 +12,30 @@ type DistributionInsert = Database['public']['Tables']['document_distributions']
 type DistributionUpdate = Database['public']['Tables']['document_distributions']['Update'];
 
 export function useOrgDocuments() {
-  const [documents, setDocuments] = useState<OrgDocument[]>([]);
-  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const fetchDocuments = useCallback(async () => {
-    try {
-      setLoading(true);
+  const { data: documents = [], isLoading: loading, refetch } = useQuery({
+    queryKey: ['org-documents'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('org_documents')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setDocuments(data || []);
-    } catch (error: any) {
-      console.error('Error fetching org documents:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load documents',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
+      return data || [];
+    },
+  });
 
-  useEffect(() => {
-    fetchDocuments();
-  }, [fetchDocuments]);
-
-  const uploadDocument = async (
-    file: File,
-    metadata: Omit<OrgDocumentInsert, 'file_url' | 'file_name' | 'file_size' | 'mime_type'>
-  ) => {
-    try {
+  const uploadMutation = useMutation({
+    mutationFn: async ({
+      file,
+      metadata,
+    }: {
+      file: File;
+      metadata: Omit<OrgDocumentInsert, 'file_url' | 'file_name' | 'file_size' | 'mime_type'>;
+    }) => {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
       const userEmail = userData?.user?.email;
@@ -53,7 +43,7 @@ export function useOrgDocuments() {
       // Upload file to storage
       const fileExt = file.name.split('.').pop();
       const filePath = `${crypto.randomUUID()}.${fileExt}`;
-      
+
       const { error: uploadError } = await supabase.storage
         .from('org-documents')
         .upload(filePath, file);
@@ -81,26 +71,27 @@ export function useOrgDocuments() {
         .single();
 
       if (error) throw error;
-
-      setDocuments(prev => [data, ...prev]);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-documents'] });
       toast({
         title: 'Success',
         description: 'Document uploaded successfully',
       });
-      return data;
-    } catch (error: any) {
+    },
+    onError: (error: Error) => {
       console.error('Error uploading document:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to upload document',
         variant: 'destructive',
       });
-      throw error;
-    }
-  };
+    },
+  });
 
-  const updateDocument = async (id: string, updates: OrgDocumentUpdate) => {
-    try {
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: OrgDocumentUpdate }) => {
       const { data, error } = await supabase
         .from('org_documents')
         .update(updates)
@@ -109,53 +100,77 @@ export function useOrgDocuments() {
         .single();
 
       if (error) throw error;
-
-      setDocuments(prev => prev.map(doc => doc.id === id ? data : doc));
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-documents'] });
       toast({
         title: 'Success',
         description: 'Document updated successfully',
       });
-      return data;
-    } catch (error: any) {
-      console.error('Error updating document:', error);
+    },
+    onError: () => {
       toast({
         title: 'Error',
         description: 'Failed to update document',
         variant: 'destructive',
       });
-      throw error;
-    }
-  };
+    },
+  });
 
-  const deleteDocument = async (id: string) => {
-    try {
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('org_documents')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
-
-      setDocuments(prev => prev.filter(doc => doc.id !== id));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-documents'] });
       toast({
         title: 'Success',
         description: 'Document deleted successfully',
       });
-    } catch (error: any) {
-      console.error('Error deleting document:', error);
+    },
+    onError: () => {
       toast({
         title: 'Error',
         description: 'Failed to delete document',
         variant: 'destructive',
       });
-      throw error;
-    }
-  };
+    },
+  });
+
+  const uploadDocument = useCallback(
+    async (
+      file: File,
+      metadata: Omit<OrgDocumentInsert, 'file_url' | 'file_name' | 'file_size' | 'mime_type'>
+    ) => {
+      return uploadMutation.mutateAsync({ file, metadata });
+    },
+    [uploadMutation]
+  );
+
+  const updateDocument = useCallback(
+    async (id: string, updates: OrgDocumentUpdate) => {
+      return updateMutation.mutateAsync({ id, updates });
+    },
+    [updateMutation]
+  );
+
+  const deleteDocument = useCallback(
+    async (id: string) => {
+      return deleteMutation.mutateAsync(id);
+    },
+    [deleteMutation]
+  );
 
   return {
     documents,
     loading,
-    refetch: fetchDocuments,
+    refetch,
     uploadDocument,
     updateDocument,
     deleteDocument,
