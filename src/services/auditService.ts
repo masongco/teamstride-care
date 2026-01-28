@@ -15,6 +15,9 @@ export type AuditAction =
   | 'timesheet.delete'
   | 'timesheet.approve'
   | 'timesheet.reject'
+  | 'timesheet.export'
+  | 'timesheet.lock'
+  | 'timesheet.unlock'
   | 'leave.create'
   | 'leave.update'
   | 'leave.approve'
@@ -27,7 +30,12 @@ export type AuditAction =
   | 'contract.create'
   | 'contract.sign'
   | 'contract.void'
-  | 'admin.override';
+  | 'admin.override'
+  | 'pay_period.create'
+  | 'pay_period.update'
+  | 'pay_period.close'
+  | 'payroll_export.generate'
+  | 'payroll_export.void';
 
 export type EntityType = 
   | 'employee'
@@ -37,7 +45,9 @@ export type EntityType =
   | 'document'
   | 'contract'
   | 'role'
-  | 'setting';
+  | 'setting'
+  | 'pay_period'
+  | 'payroll_export';
 
 interface AuditLogEntry {
   action: AuditAction;
