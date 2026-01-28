@@ -51,6 +51,20 @@ const statusColors: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
 };
 
+const EMPLOYEES_STORAGE_KEY = 'hrms_employees';
+
+const getStoredEmployees = (): Employee[] => {
+  const stored = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return mockEmployees;
+    }
+  }
+  return mockEmployees;
+};
+
 export default function Compliance() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
@@ -58,30 +72,38 @@ export default function Compliance() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [activeView, setActiveView] = useState<'certifications' | 'employees'>('certifications');
 
-  // Get unique departments and certification types
-  const departments = useMemo(() => 
-    [...new Set(mockEmployees.map((e) => e.department))].sort(),
+  // Get employees from localStorage and filter out inactive/deactivated ones
+  const activeEmployees = useMemo(() => 
+    getStoredEmployees().filter((e) => e.status !== 'inactive'),
     []
   );
 
+  // Get unique departments and certification types
+  const departments = useMemo(() => 
+    [...new Set(activeEmployees.map((e) => e.department))].sort(),
+    [activeEmployees]
+  );
+
   const certTypes = useMemo(() => 
-    [...new Set(mockEmployees.flatMap((e) => e.certifications.map((c) => c.type)))].sort(),
-    []
+    [...new Set(activeEmployees.flatMap((e) => e.certifications.map((c) => c.type)))].sort(),
+    [activeEmployees]
   );
 
   // Calculate compliance stats
   const stats = useMemo(() => ({
-    compliant: mockEmployees.filter((e) => e.complianceStatus === 'compliant').length,
-    expiring: mockEmployees.filter((e) => e.complianceStatus === 'expiring').length,
-    expired: mockEmployees.filter((e) => e.complianceStatus === 'expired').length,
-    pending: mockEmployees.filter((e) => e.complianceStatus === 'pending').length,
-  }), []);
+    compliant: activeEmployees.filter((e) => e.complianceStatus === 'compliant').length,
+    expiring: activeEmployees.filter((e) => e.complianceStatus === 'expiring').length,
+    expired: activeEmployees.filter((e) => e.complianceStatus === 'expired').length,
+    pending: activeEmployees.filter((e) => e.complianceStatus === 'pending').length,
+  }), [activeEmployees]);
 
-  const complianceRate = Math.round((stats.compliant / mockEmployees.length) * 100);
+  const complianceRate = activeEmployees.length > 0 
+    ? Math.round((stats.compliant / activeEmployees.length) * 100) 
+    : 0;
 
   // Get all certifications with employee info
   const allCertifications = useMemo(() => 
-    mockEmployees.flatMap((employee) =>
+    activeEmployees.flatMap((employee) =>
       employee.certifications.map((cert) => ({
         ...cert,
         employeeId: employee.id,
@@ -90,7 +112,7 @@ export default function Compliance() {
         department: employee.department,
       }))
     ),
-    []
+    [activeEmployees]
   );
 
   // Certification type statistics
@@ -130,7 +152,7 @@ export default function Compliance() {
 
   // Filter employees
   const filteredEmployees = useMemo(() => 
-    mockEmployees.filter((employee) => {
+    activeEmployees.filter((employee) => {
       const matchesSearch = 
         `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesDepartment = filterDepartment === 'all' || employee.department === filterDepartment;
@@ -138,7 +160,7 @@ export default function Compliance() {
       
       return matchesSearch && matchesDepartment && matchesStatus;
     }),
-    [searchQuery, filterDepartment, filterStatus]
+    [activeEmployees, searchQuery, filterDepartment, filterStatus]
   );
 
   // Export functionality
@@ -353,7 +375,7 @@ export default function Compliance() {
               <span className="text-2xl font-bold text-primary">{complianceRate}%</span>
             </div>
             <p className="text-sm text-muted-foreground mt-2">
-              {stats.compliant} of {mockEmployees.length} employees have all required certifications up to date
+              {stats.compliant} of {activeEmployees.length} employees have all required certifications up to date
             </p>
           </CardContent>
         </Card>
