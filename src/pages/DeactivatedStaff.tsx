@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, UserX, RotateCcw, ArrowLeft, ShieldAlert, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,14 +22,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { mockEmployees } from '@/lib/mock-data';
-import { Employee, EmploymentType } from '@/types/hrms';
+import { EmploymentType } from '@/types/hrms';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
 import { useUserRole } from '@/hooks/useUserRole';
-
-const EMPLOYEES_STORAGE_KEY = 'hrms_employees';
+import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
+import type { EmployeeDB } from '@/types/database';
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
   casual: 'Casual',
@@ -45,40 +43,21 @@ const employmentTypeColors: Record<EmploymentType, string> = {
   contractor: 'bg-warning/10 text-warning',
 };
 
-const getStoredEmployees = (): Employee[] => {
-  const stored = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch {
-      return mockEmployees;
-    }
-  }
-  return mockEmployees;
-};
-
 export default function DeactivatedStaff() {
   const { isManager, loading: roleLoading } = useUserRole();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
-  const [employees, setEmployees] = useState<Employee[]>(getStoredEmployees);
 
-  // Sync with localStorage
-  useEffect(() => {
-    localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(employees));
-  }, [employees]);
+  const {
+    employees,
+    isLoading,
+    error,
+    changeStatus,
+    isChangingStatus,
+  } = useSupabaseEmployees();
 
-  // Listen for storage changes from other tabs/pages
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setEmployees(getStoredEmployees());
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Show loading state while checking permissions
-  if (roleLoading) {
+  // Show loading state while checking permissions or loading data
+  if (roleLoading || isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -109,31 +88,40 @@ export default function DeactivatedStaff() {
     );
   }
 
-  const deactivatedEmployees = employees.filter((employee) => {
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-destructive">Failed to load employees. Please try again.</p>
+          <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const deactivatedEmployees = employees.filter((employee: EmployeeDB) => {
     if (employee.status !== 'inactive') return false;
     
     const matchesSearch =
-      `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      `${employee.first_name} ${employee.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.position.toLowerCase().includes(searchQuery.toLowerCase());
+      (employee.position?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
     
     const matchesDepartment = filterDepartment === 'all' || employee.department === filterDepartment;
 
     return matchesSearch && matchesDepartment;
   });
 
-  const departments = [...new Set(employees.map((e) => e.department))];
+  const departments = [...new Set(employees.map((e: EmployeeDB) => e.department).filter(Boolean))];
 
-  const handleReactivate = (employee: Employee) => {
-    const updatedEmployee = { ...employee, status: 'active' as Employee['status'] };
-    const updatedEmployees = employees.map(emp => 
-      emp.id === employee.id ? updatedEmployee : emp
-    );
-    setEmployees(updatedEmployees);
-    toast({
-      title: 'Employee Reactivated',
-      description: `${employee.firstName} ${employee.lastName} has been reactivated and moved back to the active employees list.`,
-    });
+  const handleReactivate = async (employee: EmployeeDB) => {
+    try {
+      await changeStatus(employee.id, 'active');
+    } catch (err) {
+      console.error('Failed to reactivate employee:', err);
+    }
   };
 
   return (
@@ -179,7 +167,7 @@ export default function DeactivatedStaff() {
               <SelectContent className="bg-popover">
                 <SelectItem value="all">All Departments</SelectItem>
                 {departments.map((dept) => (
-                  <SelectItem key={dept} value={dept}>
+                  <SelectItem key={dept} value={dept!}>
                     {dept}
                   </SelectItem>
                 ))}
@@ -192,30 +180,30 @@ export default function DeactivatedStaff() {
       {/* Deactivated Employee Cards Grid */}
       {deactivatedEmployees.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {deactivatedEmployees.map((employee) => (
+          {deactivatedEmployees.map((employee: EmployeeDB) => (
             <Card key={employee.id} className="border-dashed border-muted-foreground/30">
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
                     <Avatar className="h-12 w-12 opacity-60">
                       <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
-                        {employee.firstName[0]}
-                        {employee.lastName[0]}
+                        {employee.first_name[0]}
+                        {employee.last_name[0]}
                       </AvatarFallback>
                     </Avatar>
                     <div>
                       <h3 className="font-semibold text-muted-foreground">
-                        {employee.firstName} {employee.lastName}
+                        {employee.first_name} {employee.last_name}
                       </h3>
-                      <p className="text-sm text-muted-foreground/70">{employee.position}</p>
+                      <p className="text-sm text-muted-foreground/70">{employee.position || 'No position'}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <span
                           className={cn(
                             'text-xs px-2 py-0.5 rounded-full font-medium opacity-60',
-                            employmentTypeColors[employee.employmentType]
+                            employmentTypeColors[employee.employment_type as EmploymentType]
                           )}
                         >
-                          {employmentTypeLabels[employee.employmentType]}
+                          {employmentTypeLabels[employee.employment_type as EmploymentType]}
                         </span>
                       </div>
                     </div>
@@ -225,7 +213,7 @@ export default function DeactivatedStaff() {
                 <div className="mt-4 pt-4 border-t border-border space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Department</span>
-                    <span className="font-medium text-muted-foreground">{employee.department}</span>
+                    <span className="font-medium text-muted-foreground">{employee.department || 'Not assigned'}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Email</span>
@@ -244,7 +232,7 @@ export default function DeactivatedStaff() {
                 <div className="mt-4 pt-4 border-t border-border">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="outline" className="w-full">
+                      <Button variant="outline" className="w-full" disabled={isChangingStatus}>
                         <RotateCcw className="h-4 w-4 mr-2" />
                         Reactivate Employee
                       </Button>
@@ -253,7 +241,7 @@ export default function DeactivatedStaff() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Reactivate Employee?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will restore {employee.firstName} {employee.lastName} to active status. 
+                          This will restore {employee.first_name} {employee.last_name} to active status. 
                           They will appear in the main Employees list again.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
