@@ -186,14 +186,17 @@ export const mockTimesheets: TimesheetEntry[] = [
   { id: 't5', employeeId: '5', date: daysAgo(1), clockIn: '10:00', clockOut: '18:00', breakMinutes: 30, totalHours: 7.5, status: 'approved' },
 ];
 
+// Filter to only include active employees for dashboard metrics
+const activeEmployees = mockEmployees.filter(e => e.status === 'active');
+
 export const mockDashboardMetrics: DashboardMetrics = {
-  totalEmployees: mockEmployees.length,
+  totalEmployees: activeEmployees.length,
   activeToday: 4,
   pendingLeaveRequests: mockLeaveRequests.filter(l => l.status === 'pending').length,
-  complianceAlerts: mockEmployees.filter(e => e.complianceStatus === 'expired' || e.complianceStatus === 'expiring').length,
-  expiringCertifications: mockEmployees.flatMap(e => e.certifications.filter(c => c.status === 'expiring')),
-  upcomingBirthdays: [mockEmployees[0], mockEmployees[4]],
-  recentHires: [mockEmployees[5], mockEmployees[3]],
+  complianceAlerts: activeEmployees.filter(e => e.complianceStatus === 'expired' || e.complianceStatus === 'expiring').length,
+  expiringCertifications: activeEmployees.flatMap(e => e.certifications.filter(c => c.status === 'expiring')),
+  upcomingBirthdays: activeEmployees.filter(e => mockEmployees.indexOf(e) === 0 || mockEmployees.indexOf(e) === 4),
+  recentHires: activeEmployees.filter(e => mockEmployees.indexOf(e) === 5 || mockEmployees.indexOf(e) === 3),
 };
 
 export const getEmployeeById = (id: string): Employee | undefined => {
