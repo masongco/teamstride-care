@@ -1,25 +1,23 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
   Users, 
   ClipboardCheck, 
   Target, 
   Search,
-  Plus,
-  Calendar,
-  TrendingUp,
+  BarChart3,
   Star
 } from 'lucide-react';
 import { MetricCard } from '@/components/ui/metric-card';
 import { SupervisionsTab } from '@/components/performance/SupervisionsTab';
 import { ReviewsTab } from '@/components/performance/ReviewsTab';
 import { CompetenciesTab } from '@/components/performance/CompetenciesTab';
+import { AnalyticsTab } from '@/components/performance/AnalyticsTab';
 import { useSupervisions, usePerformanceReviews, useCompetencies } from '@/hooks/usePerformance';
 
 export default function Performance() {
-  const [activeTab, setActiveTab] = useState('supervisions');
+  const [activeTab, setActiveTab] = useState('analytics');
   const [searchQuery, setSearchQuery] = useState('');
   
   const { supervisions, loading: supervisionsLoading } = useSupervisions();
@@ -93,7 +91,11 @@ export default function Performance() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsTrigger value="analytics" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">Analytics</span>
+          </TabsTrigger>
           <TabsTrigger value="supervisions" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Supervisions</span>
@@ -107,6 +109,10 @@ export default function Performance() {
             <span className="hidden sm:inline">Competencies</span>
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="analytics">
+          <AnalyticsTab />
+        </TabsContent>
 
         <TabsContent value="supervisions">
           <SupervisionsTab searchQuery={searchQuery} />
