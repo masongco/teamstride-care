@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Filter, AlertTriangle, CheckCircle, XCircle, Clock, Download, Upload, Users, FileCheck, ChevronDown, X } from 'lucide-react';
+import { Search, Filter, AlertTriangle, CheckCircle, XCircle, Clock, Download, Upload, Users, FileCheck, ChevronDown, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -29,11 +29,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { mockEmployees } from '@/lib/mock-data';
+import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
-import { ComplianceStatus, Employee } from '@/types/hrms';
+import { ComplianceStatus } from '@/types/hrms';
+import type { EmployeeDB, EmployeeCertificationDB, ComplianceStatusDB } from '@/types/database';
 
 const certTypeLabels: Record<string, string> = {
   police_check: 'Police Check',
@@ -51,19 +52,10 @@ const statusColors: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
 };
 
-const EMPLOYEES_STORAGE_KEY = 'hrms_employees';
-
-const getStoredEmployees = (): Employee[] => {
-  const stored = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch {
-      return mockEmployees;
-    }
-  }
-  return mockEmployees;
-};
+// Transform DB employee with certifications for display
+interface EmployeeWithCerts extends EmployeeDB {
+  certifications: EmployeeCertificationDB[];
+}
 
 export default function Compliance() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,29 +64,42 @@ export default function Compliance() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [activeView, setActiveView] = useState<'certifications' | 'employees'>('certifications');
 
-  // Get employees from localStorage and filter out inactive/deactivated ones
-  const activeEmployees = useMemo(() => 
-    getStoredEmployees().filter((e) => e.status !== 'inactive'),
-    []
-  );
+  // Use Supabase data exclusively - no localStorage fallback
+  const { 
+    employees: dbEmployees, 
+    certifications: dbCertifications, 
+    getCertificationsForEmployee,
+    isLoading, 
+    error 
+  } = useSupabaseEmployees();
 
-  // Get unique departments and certification types
+  // Combine employees with their certifications and filter out inactive
+  const activeEmployees = useMemo(() => {
+    return dbEmployees
+      .filter((e) => e.status !== 'inactive')
+      .map((emp): EmployeeWithCerts => ({
+        ...emp,
+        certifications: getCertificationsForEmployee(emp.id),
+      }));
+  }, [dbEmployees, getCertificationsForEmployee]);
+
+  // Get unique departments and certification types from Supabase data
   const departments = useMemo(() => 
-    [...new Set(activeEmployees.map((e) => e.department))].sort(),
+    [...new Set(activeEmployees.map((e) => e.department).filter(Boolean))].sort() as string[],
     [activeEmployees]
   );
 
   const certTypes = useMemo(() => 
-    [...new Set(activeEmployees.flatMap((e) => e.certifications.map((c) => c.type)))].sort(),
-    [activeEmployees]
+    [...new Set(dbCertifications.map((c) => c.type))].sort(),
+    [dbCertifications]
   );
 
-  // Calculate compliance stats
+  // Calculate compliance stats from Supabase data
   const stats = useMemo(() => ({
-    compliant: activeEmployees.filter((e) => e.complianceStatus === 'compliant').length,
-    expiring: activeEmployees.filter((e) => e.complianceStatus === 'expiring').length,
-    expired: activeEmployees.filter((e) => e.complianceStatus === 'expired').length,
-    pending: activeEmployees.filter((e) => e.complianceStatus === 'pending').length,
+    compliant: activeEmployees.filter((e) => e.compliance_status === 'compliant').length,
+    expiring: activeEmployees.filter((e) => e.compliance_status === 'expiring').length,
+    expired: activeEmployees.filter((e) => e.compliance_status === 'expired').length,
+    pending: activeEmployees.filter((e) => e.compliance_status === 'pending').length,
   }), [activeEmployees]);
 
   const complianceRate = activeEmployees.length > 0 
@@ -105,11 +110,16 @@ export default function Compliance() {
   const allCertifications = useMemo(() => 
     activeEmployees.flatMap((employee) =>
       employee.certifications.map((cert) => ({
-        ...cert,
+        id: cert.id,
+        name: cert.name,
+        type: cert.type,
+        issueDate: cert.issue_date || '',
+        expiryDate: cert.expiry_date || '',
+        status: cert.status,
         employeeId: employee.id,
-        employeeName: `${employee.firstName} ${employee.lastName}`,
-        employeeInitials: `${employee.firstName[0]}${employee.lastName[0]}`,
-        department: employee.department,
+        employeeName: `${employee.first_name} ${employee.last_name}`,
+        employeeInitials: `${employee.first_name[0] || ''}${employee.last_name[0] || ''}`,
+        department: employee.department || 'Unassigned',
       }))
     ),
     [activeEmployees]
@@ -124,14 +134,17 @@ export default function Compliance() {
         statsMap[cert.type] = { total: 0, compliant: 0, expiring: 0, expired: 0, pending: 0 };
       }
       statsMap[cert.type].total++;
-      statsMap[cert.type][cert.status as keyof typeof statsMap[string]]++;
+      const status = cert.status as keyof typeof statsMap[string];
+      if (status in statsMap[cert.type]) {
+        statsMap[cert.type][status]++;
+      }
     });
 
     return Object.entries(statsMap).map(([type, data]) => ({
       type,
       label: certTypeLabels[type] || type,
       ...data,
-      complianceRate: Math.round((data.compliant / data.total) * 100),
+      complianceRate: data.total > 0 ? Math.round((data.compliant / data.total) * 100) : 0,
     }));
   }, [allCertifications]);
 
@@ -154,9 +167,9 @@ export default function Compliance() {
   const filteredEmployees = useMemo(() => 
     activeEmployees.filter((employee) => {
       const matchesSearch = 
-        `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchQuery.toLowerCase());
+        `${employee.first_name} ${employee.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesDepartment = filterDepartment === 'all' || employee.department === filterDepartment;
-      const matchesStatus = filterStatus === 'all' || employee.complianceStatus === filterStatus;
+      const matchesStatus = filterStatus === 'all' || employee.compliance_status === filterStatus;
       
       return matchesSearch && matchesDepartment && matchesStatus;
     }),
@@ -213,9 +226,9 @@ export default function Compliance() {
       };
       
       return [
-        `${employee.firstName} ${employee.lastName}`,
-        employee.department,
-        employee.complianceStatus,
+        `${employee.first_name} ${employee.last_name}`,
+        employee.department || 'Unassigned',
+        employee.compliance_status,
         certStats.total.toString(),
         certStats.compliant.toString(),
         certStats.expiring.toString(),
@@ -248,6 +261,39 @@ export default function Compliance() {
   };
 
   const hasActiveFilters = searchQuery || filterDepartment !== 'all' || filterCertType !== 'all' || filterStatus !== 'all';
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading compliance data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state - fail closed, do not fall back to localStorage
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="p-6 max-w-md">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <XCircle className="h-12 w-12 text-destructive" />
+            <h2 className="text-lg font-semibold">Unable to Load Compliance Data</h2>
+            <p className="text-sm text-muted-foreground">
+              The compliance dashboard cannot be displayed because employee data could not be retrieved from the database.
+              Please try again or contact support if the issue persists.
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -387,42 +433,48 @@ export default function Compliance() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {certTypeStats.map((stat) => (
-                <div key={stat.type} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{stat.label}</span>
-                    <span className="text-muted-foreground">
-                      {stat.compliant}/{stat.total} compliant
-                    </span>
+              {certTypeStats.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No certification data available
+                </p>
+              ) : (
+                certTypeStats.map((stat) => (
+                  <div key={stat.type} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{stat.label}</span>
+                      <span className="text-muted-foreground">
+                        {stat.compliant}/{stat.total} compliant
+                      </span>
+                    </div>
+                    <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+                      {stat.compliant > 0 && (
+                        <div 
+                          className="bg-success transition-all" 
+                          style={{ width: `${(stat.compliant / stat.total) * 100}%` }} 
+                        />
+                      )}
+                      {stat.expiring > 0 && (
+                        <div 
+                          className="bg-warning transition-all" 
+                          style={{ width: `${(stat.expiring / stat.total) * 100}%` }} 
+                        />
+                      )}
+                      {stat.expired > 0 && (
+                        <div 
+                          className="bg-destructive transition-all" 
+                          style={{ width: `${(stat.expired / stat.total) * 100}%` }} 
+                        />
+                      )}
+                      {stat.pending > 0 && (
+                        <div 
+                          className="bg-muted-foreground/30 transition-all" 
+                          style={{ width: `${(stat.pending / stat.total) * 100}%` }} 
+                        />
+                      )}
+                    </div>
                   </div>
-                  <div className="flex h-2 rounded-full overflow-hidden bg-muted">
-                    {stat.compliant > 0 && (
-                      <div 
-                        className="bg-success transition-all" 
-                        style={{ width: `${(stat.compliant / stat.total) * 100}%` }} 
-                      />
-                    )}
-                    {stat.expiring > 0 && (
-                      <div 
-                        className="bg-warning transition-all" 
-                        style={{ width: `${(stat.expiring / stat.total) * 100}%` }} 
-                      />
-                    )}
-                    {stat.expired > 0 && (
-                      <div 
-                        className="bg-destructive transition-all" 
-                        style={{ width: `${(stat.expired / stat.total) * 100}%` }} 
-                      />
-                    )}
-                    {stat.pending > 0 && (
-                      <div 
-                        className="bg-muted-foreground/30 transition-all" 
-                        style={{ width: `${(stat.pending / stat.total) * 100}%` }} 
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -556,7 +608,7 @@ interface CertificationWithEmployee {
   type: string;
   issueDate: string;
   expiryDate: string;
-  status: string;
+  status: ComplianceStatusDB;
   employeeId: string;
   employeeName: string;
   employeeInitials: string;
@@ -651,7 +703,7 @@ function CertificationsTable({ certifications }: { certifications: Certification
   );
 }
 
-function EmployeesComplianceTable({ employees }: { employees: Employee[] }) {
+function EmployeesComplianceTable({ employees }: { employees: EmployeeWithCerts[] }) {
   return (
     <div className="rounded-lg border overflow-hidden">
       <Table>
@@ -690,20 +742,20 @@ function EmployeesComplianceTable({ employees }: { employees: Employee[] }) {
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                          {employee.firstName[0]}{employee.lastName[0]}
+                          {employee.first_name[0]}{employee.last_name[0]}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <span className="font-medium block">{employee.firstName} {employee.lastName}</span>
-                        <span className="text-xs text-muted-foreground">{employee.position}</span>
+                        <span className="font-medium block">{employee.first_name} {employee.last_name}</span>
+                        <span className="text-xs text-muted-foreground">{employee.position || 'No position'}</span>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm text-muted-foreground">{employee.department}</span>
+                    <span className="text-sm text-muted-foreground">{employee.department || 'Unassigned'}</span>
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={employee.complianceStatus} size="sm" />
+                    <StatusBadge status={employee.compliance_status as ComplianceStatus} size="sm" />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">

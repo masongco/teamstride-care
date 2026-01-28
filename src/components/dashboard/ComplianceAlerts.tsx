@@ -1,9 +1,10 @@
-import { AlertTriangle, XCircle, Clock, ChevronRight } from 'lucide-react';
+import { AlertTriangle, XCircle, Clock, ChevronRight, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { mockEmployees } from '@/lib/mock-data';
+import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useMemo } from 'react';
 
 interface ComplianceAlert {
   employeeId: string;
@@ -15,26 +16,52 @@ interface ComplianceAlert {
 }
 
 export function ComplianceAlerts() {
-  // Generate alerts from mock data
-  const alerts: ComplianceAlert[] = mockEmployees.flatMap((employee) =>
-    employee.certifications
-      .filter((cert) => cert.status === 'expired' || cert.status === 'expiring')
-      .map((cert) => ({
-        employeeId: employee.id,
-        employeeName: `${employee.firstName} ${employee.lastName}`,
-        certification: cert.name,
-        expiryDate: cert.expiryDate,
-        status: cert.status as 'expired' | 'expiring',
-        daysUntilExpiry: differenceInDays(parseISO(cert.expiryDate), new Date()),
-      }))
-  );
+  const { 
+    employees, 
+    certifications, 
+    getCertificationsForEmployee,
+    isLoading 
+  } = useSupabaseEmployees();
 
-  // Sort by urgency (expired first, then by days until expiry)
-  alerts.sort((a, b) => {
-    if (a.status === 'expired' && b.status !== 'expired') return -1;
-    if (a.status !== 'expired' && b.status === 'expired') return 1;
-    return a.daysUntilExpiry - b.daysUntilExpiry;
-  });
+  // Generate alerts from Supabase data
+  const alerts: ComplianceAlert[] = useMemo(() => {
+    return employees
+      .filter((e) => e.status === 'active')
+      .flatMap((employee) => {
+        const empCerts = getCertificationsForEmployee(employee.id);
+        return empCerts
+          .filter((cert) => cert.status === 'expired' || cert.status === 'expiring')
+          .map((cert) => ({
+            employeeId: employee.id,
+            employeeName: `${employee.first_name} ${employee.last_name}`,
+            certification: cert.name,
+            expiryDate: cert.expiry_date || '',
+            status: cert.status as 'expired' | 'expiring',
+            daysUntilExpiry: cert.expiry_date 
+              ? differenceInDays(parseISO(cert.expiry_date), new Date())
+              : 0,
+          }));
+      })
+      // Sort by urgency (expired first, then by days until expiry)
+      .sort((a, b) => {
+        if (a.status === 'expired' && b.status !== 'expired') return -1;
+        if (a.status !== 'expired' && b.status === 'expired') return 1;
+        return a.daysUntilExpiry - b.daysUntilExpiry;
+      });
+  }, [employees, getCertificationsForEmployee]);
+
+  if (isLoading) {
+    return (
+      <Card className="h-full">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-lg font-semibold">Compliance Alerts</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="h-full">
