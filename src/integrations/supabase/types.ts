@@ -68,6 +68,7 @@ export type Database = {
           id: string
           name: string
           night_multiplier: number | null
+          organisation_id: string | null
           overtime_multiplier: number | null
           public_holiday_multiplier: number | null
           saturday_multiplier: number | null
@@ -82,6 +83,7 @@ export type Database = {
           id?: string
           name: string
           night_multiplier?: number | null
+          organisation_id?: string | null
           overtime_multiplier?: number | null
           public_holiday_multiplier?: number | null
           saturday_multiplier?: number | null
@@ -96,13 +98,22 @@ export type Database = {
           id?: string
           name?: string
           night_multiplier?: number | null
+          organisation_id?: string | null
           overtime_multiplier?: number | null
           public_holiday_multiplier?: number | null
           saturday_multiplier?: number | null
           sunday_multiplier?: number | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "award_classifications_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       competencies: {
         Row: {
@@ -682,6 +693,63 @@ export type Database = {
           },
         ]
       }
+      employee_certifications: {
+        Row: {
+          created_at: string
+          document_id: string | null
+          employee_id: string
+          expiry_date: string | null
+          id: string
+          issue_date: string | null
+          name: string
+          organisation_id: string
+          status: Database["public"]["Enums"]["compliance_status"]
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document_id?: string | null
+          employee_id: string
+          expiry_date?: string | null
+          id?: string
+          issue_date?: string | null
+          name: string
+          organisation_id: string
+          status?: Database["public"]["Enums"]["compliance_status"]
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string | null
+          employee_id?: string
+          expiry_date?: string | null
+          id?: string
+          issue_date?: string | null
+          name?: string
+          organisation_id?: string
+          status?: Database["public"]["Enums"]["compliance_status"]
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_certifications_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_certifications_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_documents: {
         Row: {
           created_at: string
@@ -779,6 +847,156 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      employees: {
+        Row: {
+          avatar_url: string | null
+          award_classification_id: string | null
+          compliance_status: Database["public"]["Enums"]["compliance_status"]
+          created_at: string
+          department: string | null
+          email: string
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          emergency_contact_relationship: string | null
+          employment_type: Database["public"]["Enums"]["employment_type"]
+          end_date: string | null
+          first_name: string
+          id: string
+          last_name: string
+          organisation_id: string
+          pay_rate: number | null
+          phone: string | null
+          position: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["employee_status"]
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          award_classification_id?: string | null
+          compliance_status?: Database["public"]["Enums"]["compliance_status"]
+          created_at?: string
+          department?: string | null
+          email: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_relationship?: string | null
+          employment_type?: Database["public"]["Enums"]["employment_type"]
+          end_date?: string | null
+          first_name: string
+          id?: string
+          last_name: string
+          organisation_id: string
+          pay_rate?: number | null
+          phone?: string | null
+          position?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["employee_status"]
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          award_classification_id?: string | null
+          compliance_status?: Database["public"]["Enums"]["compliance_status"]
+          created_at?: string
+          department?: string | null
+          email?: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_relationship?: string | null
+          employment_type?: Database["public"]["Enums"]["employment_type"]
+          end_date?: string | null
+          first_name?: string
+          id?: string
+          last_name?: string
+          organisation_id?: string
+          pay_rate?: number | null
+          phone?: string | null
+          position?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["employee_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_award_classification_id_fkey"
+            columns: ["award_classification_id"]
+            isOneToOne: false
+            referencedRelation: "award_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_requests: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          employee_id: string
+          end_date: string
+          hours: number
+          id: string
+          organisation_id: string
+          reason: string | null
+          start_date: string
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          employee_id: string
+          end_date: string
+          hours: number
+          id?: string
+          organisation_id: string
+          reason?: string | null
+          start_date: string
+          status?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          employee_id?: string
+          end_date?: string
+          hours?: number
+          id?: string
+          organisation_id?: string
+          reason?: string | null
+          start_date?: string
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_requests_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       module_completions: {
         Row: {
@@ -1771,6 +1989,72 @@ export type Database = {
           },
         ]
       }
+      timesheets: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          break_minutes: number
+          clock_in: string
+          clock_out: string | null
+          created_at: string
+          date: string
+          employee_id: string
+          id: string
+          notes: string | null
+          organisation_id: string
+          status: string
+          total_hours: number | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          break_minutes?: number
+          clock_in: string
+          clock_out?: string | null
+          created_at?: string
+          date: string
+          employee_id: string
+          id?: string
+          notes?: string | null
+          organisation_id: string
+          status?: string
+          total_hours?: number | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          break_minutes?: number
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+          date?: string
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          organisation_id?: string
+          status?: string
+          total_hours?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheets_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheets_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_course_assignments: {
         Row: {
           assignment_id: string | null
@@ -1861,6 +2145,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["platform_role"]
       }
+      get_user_organisation_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -1880,6 +2165,10 @@ export type Database = {
         Returns: boolean
       }
       is_platform_user: { Args: { _user_id: string }; Returns: boolean }
+      user_belongs_to_org: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "employee"
@@ -1891,6 +2180,7 @@ export type Database = {
         | "department"
         | "location"
         | "all"
+      compliance_status: "compliant" | "expiring" | "expired" | "pending"
       contract_status:
         | "draft"
         | "pending_signature"
@@ -1905,6 +2195,13 @@ export type Database = {
         | "acknowledged"
         | "signed"
       document_status: "pending" | "approved" | "rejected" | "expired"
+      employee_status:
+        | "active"
+        | "inactive"
+        | "onboarding"
+        | "offboarding"
+        | "terminated"
+      employment_type: "casual" | "part_time" | "full_time" | "contractor"
       feedback_type: "self" | "manager" | "peer" | "direct_report"
       module_type: "video" | "pdf" | "policy" | "quiz"
       org_document_category:
@@ -2058,6 +2355,7 @@ export const Constants = {
         "location",
         "all",
       ],
+      compliance_status: ["compliant", "expiring", "expired", "pending"],
       contract_status: [
         "draft",
         "pending_signature",
@@ -2074,6 +2372,14 @@ export const Constants = {
         "signed",
       ],
       document_status: ["pending", "approved", "rejected", "expired"],
+      employee_status: [
+        "active",
+        "inactive",
+        "onboarding",
+        "offboarding",
+        "terminated",
+      ],
+      employment_type: ["casual", "part_time", "full_time", "contractor"],
       feedback_type: ["self", "manager", "peer", "direct_report"],
       module_type: ["video", "pdf", "policy", "quiz"],
       org_document_category: [
