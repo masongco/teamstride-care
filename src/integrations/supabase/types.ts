@@ -664,6 +664,54 @@ export type Database = {
           },
         ]
       }
+      employee_goals: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string | null
+          id: string
+          milestones: Json | null
+          notes: string | null
+          priority: string | null
+          progress_percentage: number | null
+          status: string | null
+          target_date: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          milestones?: Json | null
+          notes?: string | null
+          priority?: string | null
+          progress_percentage?: number | null
+          status?: string | null
+          target_date?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          milestones?: Json | null
+          notes?: string | null
+          priority?: string | null
+          progress_percentage?: number | null
+          status?: string | null
+          target_date?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       module_completions: {
         Row: {
           completed_at: string
