@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOrganisationsManagement } from '@/hooks/useOrganisationsManagement';
 import { format } from 'date-fns';
 
 interface ProfileData {
@@ -37,12 +38,28 @@ interface ProfileData {
   avatar_url?: string;
 }
 
+interface OrganisationInfo {
+  id: string;
+  legal_name: string;
+  trading_name?: string | null;
+  timezone?: string | null;
+  status?: string | null;
+  logo_url?: string | null;
+}
+
 export default function MyProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [organisation, setOrganisation] = useState<OrganisationInfo | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<ProfileData>>({});
+  const [showOrganisationForm, setShowOrganisationForm] = useState(false);
+  const [orgLegalName, setOrgLegalName] = useState('');
+  const [orgTradingName, setOrgTradingName] = useState('');
+  const [orgTimezone, setOrgTimezone] = useState('Australia/Sydney');
+  const [orgSubmitting, setOrgSubmitting] = useState(false);
+  const { addOrganisation } = useOrganisationsManagement();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -74,6 +91,23 @@ export default function MyProfile() {
         start_date: user.user_metadata?.start_date,
         employee_id: user.user_metadata?.employee_id,
       };
+
+      const { data: organisationId, error: organisationIdError } = await supabase.rpc(
+        'get_user_organisation_id',
+        { _user_id: user.id }
+      );
+
+      if (!organisationIdError && organisationId) {
+        const { data: organisationData } = await supabase
+          .from('organisations')
+          .select('id, legal_name, trading_name, timezone, status, logo_url')
+          .eq('id', organisationId)
+          .maybeSingle();
+
+        if (organisationData) {
+          setOrganisation(organisationData);
+        }
+      }
 
       setProfile(profileInfo);
       setFormData(profileInfo);
@@ -124,6 +158,46 @@ export default function MyProfile() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCreateOrganisation = async () => {
+    if (!orgLegalName.trim()) {
+      toast({
+        title: 'Missing organisation name',
+        description: 'Please enter a legal name to continue.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setOrgSubmitting(true);
+    const result = await addOrganisation({
+      legal_name: orgLegalName.trim(),
+      trading_name: orgTradingName.trim() || null,
+      timezone: orgTimezone.trim() || null,
+    });
+
+    if (!result.success) {
+      toast({
+        title: 'Error',
+        description: 'Failed to add organisation. Please try again.',
+        variant: 'destructive',
+      });
+      setOrgSubmitting(false);
+      return;
+    }
+
+    setOrganisation({
+      id: result.data.id,
+      legal_name: result.data.legal_name,
+      trading_name: result.data.trading_name ?? null,
+      timezone: result.data.timezone ?? null,
+      status: (result.data as { status?: string | null }).status ?? null,
+      logo_url: (result.data as { logo_url?: string | null }).logo_url ?? null,
+    });
+    setShowOrganisationForm(false);
+    setOrgSubmitting(false);
+    toast({ title: 'Organisation added' });
   };
 
   if (loading) {
@@ -316,6 +390,96 @@ export default function MyProfile() {
               )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Organisation Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building className="h-5 w-5" />
+            Organisation Information
+          </CardTitle>
+          <CardDescription>Your organisation details (read-only)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {organisation ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Legal Name</Label>
+                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+                  <Building className="h-4 w-4 text-muted-foreground" />
+                  <span>{organisation.legal_name}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Trading Name</Label>
+                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+                  <span>{organisation.trading_name || 'Not available'}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Timezone</Label>
+                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+                  <span>{organisation.timezone || 'Not available'}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+                  <span className="capitalize">{organisation.status || 'Not available'}</span>
+                </div>
+              </div>
+            </div>
+          ) : showOrganisationForm ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Legal Name</Label>
+                  <Input
+                    value={orgLegalName}
+                    onChange={(e) => setOrgLegalName(e.target.value)}
+                    placeholder="Enter legal name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Trading Name</Label>
+                  <Input
+                    value={orgTradingName}
+                    onChange={(e) => setOrgTradingName(e.target.value)}
+                    placeholder="Enter trading name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Timezone</Label>
+                  <Input
+                    value={orgTimezone}
+                    onChange={(e) => setOrgTimezone(e.target.value)}
+                    placeholder="e.g., Australia/Sydney"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowOrganisationForm(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateOrganisation} disabled={orgSubmitting}>
+                  {orgSubmitting ? 'Saving...' : 'Save Organisation'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-muted-foreground">
+                No organisation is linked to your profile yet.
+              </p>
+              <div>
+                <Button onClick={() => setShowOrganisationForm(true)}>
+                  Add Organisation
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

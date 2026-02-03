@@ -1,7 +1,24 @@
 import { useState } from 'react';
-import { useSettings, Department, Position, AwardClassification, AwardClassificationInput } from '@/hooks/useSettings';
-import { useUserRole, useUserRolesManagement, AppRole, UserWithRole } from '@/hooks/useUserRole';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  useSettings,
+  Department,
+  Position,
+  AwardClassification,
+  AwardClassificationInput,
+} from '@/hooks/useSettings';
+import {
+  useUserRole,
+  useUserRolesManagement,
+  AppRole,
+  UserWithRole,
+} from '@/hooks/useUserRole';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,12 +58,41 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Building2, Briefcase, Loader2, Users, Shield, ShieldCheck, User, DollarSign, LayoutGrid, UserPlus, Search, X, Download } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Building2,
+  Briefcase,
+  Loader2,
+  Users,
+  Shield,
+  ShieldCheck,
+  User,
+  DollarSign,
+  LayoutGrid,
+  UserPlus,
+  Search,
+  X,
+  Download,
+  Building,
+} from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { SidebarSettingsTab } from '@/components/settings/SidebarSettingsTab';
 import { CreateUserDialog } from '@/components/settings/CreateUserDialog';
+import {
+  useOrganisationsManagement,
+  Organisation,
+} from '@/hooks/useOrganisationsManagement';
 
-const ROLE_CONFIG: Record<AppRole, { label: string; icon: typeof Shield; variant: 'default' | 'secondary' | 'outline' }> = {
+const ROLE_CONFIG: Record<
+  AppRole,
+  {
+    label: string;
+    icon: typeof Shield;
+    variant: 'default' | 'secondary' | 'outline';
+  }
+> = {
   admin: { label: 'Admin', icon: ShieldCheck, variant: 'default' },
   manager: { label: 'Manager', icon: Shield, variant: 'secondary' },
   employee: { label: 'Employee', icon: User, variant: 'outline' },
@@ -70,13 +116,91 @@ export default function Settings() {
   } = useSettings();
 
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { users, loading: usersLoading, updateUserRole, deleteUserRole, fetchUsersWithRoles } = useUserRolesManagement();
+  const {
+    users,
+    loading: usersLoading,
+    updateUserRole,
+    deleteUserRole,
+    fetchUsersWithRoles,
+  } = useUserRolesManagement();
+
+  // Organisations state and handlers
+  const {
+    organisations,
+    loading: orgLoading,
+    addOrganisation,
+    updateOrganisation,
+    deleteOrganisation,
+  } = useOrganisationsManagement();
+  const [orgDialogOpen, setOrgDialogOpen] = useState(false);
+  const [orgDeleteDialogOpen, setOrgDeleteDialogOpen] = useState(false);
+  const [editingOrganisation, setEditingOrganisation] =
+    useState<Organisation | null>(null);
+  const [deletingOrganisation, setDeletingOrganisation] =
+    useState<Organisation | null>(null);
+  const [orgLegalName, setOrgLegalName] = useState('');
+  const [orgTradingName, setOrgTradingName] = useState('');
+  const [orgTimezone, setOrgTimezone] = useState('Australia/Sydney');
+  const [orgSubmitting, setOrgSubmitting] = useState(false);
+
+  const openOrgDialog = (organisation?: Organisation) => {
+    if (organisation) {
+      setEditingOrganisation(organisation);
+      setOrgLegalName(organisation.legal_name);
+      setOrgTradingName(organisation.trading_name || '');
+      setOrgTimezone(organisation.timezone || '');
+    } else {
+      setEditingOrganisation(null);
+      setOrgLegalName('');
+      setOrgTradingName('');
+      setOrgTimezone('Australia/Sydney');
+    }
+    setOrgDialogOpen(true);
+  };
+
+  const handleOrgSubmit = async () => {
+    if (!orgLegalName.trim()) return;
+    setOrgSubmitting(true);
+    const result = editingOrganisation
+      ? await updateOrganisation(editingOrganisation.id, {
+          legal_name: orgLegalName.trim(),
+          trading_name: orgTradingName.trim() || null,
+          timezone: orgTimezone.trim() || null,
+        })
+      : await addOrganisation({
+          legal_name: orgLegalName.trim(),
+          trading_name: orgTradingName.trim() || null,
+          timezone: orgTimezone.trim() || null,
+        });
+
+    if (!result.success) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save organisation',
+        variant: 'destructive',
+      });
+      setOrgSubmitting(false);
+      return;
+    }
+
+    setOrgSubmitting(false);
+    setOrgDialogOpen(false);
+  };
+
+  const handleOrgDelete = async () => {
+    if (!deletingOrganisation) return;
+    await deleteOrganisation(deletingOrganisation.id);
+    setOrgDeleteDialogOpen(false);
+    setDeletingOrganisation(null);
+  };
 
   // Department state
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
   const [deptDeleteDialogOpen, setDeptDeleteDialogOpen] = useState(false);
-  const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
-  const [deletingDepartment, setDeletingDepartment] = useState<Department | null>(null);
+  const [editingDepartment, setEditingDepartment] =
+    useState<Department | null>(null);
+  const [deletingDepartment, setDeletingDepartment] =
+    useState<Department | null>(null);
   const [deptName, setDeptName] = useState('');
   const [deptDescription, setDeptDescription] = useState('');
   const [deptSubmitting, setDeptSubmitting] = useState(false);
@@ -84,8 +208,10 @@ export default function Settings() {
   // Position state
   const [posDialogOpen, setPosDialogOpen] = useState(false);
   const [posDeleteDialogOpen, setPosDeleteDialogOpen] = useState(false);
-  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
-  const [deletingPosition, setDeletingPosition] = useState<Position | null>(null);
+  const [editingPosition, setEditingPosition] =
+    useState<Position | null>(null);
+  const [deletingPosition, setDeletingPosition] =
+    useState<Position | null>(null);
   const [posName, setPosName] = useState('');
   const [posDepartmentId, setPosDepartmentId] = useState<string>('');
   const [posDescription, setPosDescription] = useState('');
@@ -102,33 +228,45 @@ export default function Settings() {
 
   // Award Classification state
   const [awardDialogOpen, setAwardDialogOpen] = useState(false);
-  const [awardDeleteDialogOpen, setAwardDeleteDialogOpen] = useState(false);
-  const [editingAward, setEditingAward] = useState<AwardClassification | null>(null);
-  const [deletingAward, setDeletingAward] = useState<AwardClassification | null>(null);
+  const [awardDeleteDialogOpen, setAwardDeleteDialogOpen] =
+    useState(false);
+  const [editingAward, setEditingAward] =
+    useState<AwardClassification | null>(null);
+  const [deletingAward, setDeletingAward] =
+    useState<AwardClassification | null>(null);
   const [awardName, setAwardName] = useState('');
   const [awardDescription, setAwardDescription] = useState('');
   const [awardBaseRate, setAwardBaseRate] = useState('');
   const [awardSaturdayMult, setAwardSaturdayMult] = useState('1.5');
   const [awardSundayMult, setAwardSundayMult] = useState('2.0');
-  const [awardPublicHolidayMult, setAwardPublicHolidayMult] = useState('2.5');
+  const [awardPublicHolidayMult, setAwardPublicHolidayMult] =
+    useState('2.5');
   const [awardEveningMult, setAwardEveningMult] = useState('1.15');
   const [awardNightMult, setAwardNightMult] = useState('1.25');
   const [awardOvertimeMult, setAwardOvertimeMult] = useState('1.5');
   const [awardSubmitting, setAwardSubmitting] = useState(false);
 
   // Create User state
-  const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
+  const [createUserDialogOpen, setCreateUserDialogOpen] =
+    useState(false);
 
   // User search and filter state
   const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState<AppRole | 'all'>('all');
+  const [userRoleFilter, setUserRoleFilter] =
+    useState<AppRole | 'all'>('all');
 
   // Filtered users
   const filteredUsers = users.filter((user) => {
-    const matchesSearch = userSearchQuery === '' || 
-      (user.display_name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-       user.email.toLowerCase().includes(userSearchQuery.toLowerCase()));
-    const matchesRole = userRoleFilter === 'all' || user.role === userRoleFilter;
+    const matchesSearch =
+      userSearchQuery === '' ||
+      (user.display_name
+        ?.toLowerCase()
+        .includes(userSearchQuery.toLowerCase()) ||
+        user.email
+          .toLowerCase()
+          .includes(userSearchQuery.toLowerCase()));
+    const matchesRole =
+      userRoleFilter === 'all' || user.role === userRoleFilter;
     return matchesSearch && matchesRole;
   });
 
@@ -148,10 +286,14 @@ export default function Settings() {
 
   const handleDeptSubmit = async () => {
     if (!deptName.trim()) return;
-    
+
     setDeptSubmitting(true);
     if (editingDepartment) {
-      await updateDepartment(editingDepartment.id, deptName.trim(), deptDescription.trim());
+      await updateDepartment(
+        editingDepartment.id,
+        deptName.trim(),
+        deptDescription.trim(),
+      );
     } else {
       await addDepartment(deptName.trim(), deptDescription.trim());
     }
@@ -184,17 +326,21 @@ export default function Settings() {
 
   const handlePosSubmit = async () => {
     if (!posName.trim()) return;
-    
+
     setPosSubmitting(true);
     if (editingPosition) {
       await updatePosition(
-        editingPosition.id, 
-        posName.trim(), 
-        posDepartmentId || undefined, 
-        posDescription.trim()
+        editingPosition.id,
+        posName.trim(),
+        posDepartmentId || undefined,
+        posDescription.trim(),
       );
     } else {
-      await addPosition(posName.trim(), posDepartmentId || undefined, posDescription.trim());
+      await addPosition(
+        posName.trim(),
+        posDepartmentId || undefined,
+        posDescription.trim(),
+      );
     }
     setPosSubmitting(false);
     setPosDialogOpen(false);
@@ -216,10 +362,13 @@ export default function Settings() {
 
   const handleRoleSubmit = async () => {
     if (!editingUser) return;
-    
+
     setRoleSubmitting(true);
-    const result = await updateUserRole(editingUser.user_id, selectedRole);
-    
+    const result = await updateUserRole(
+      editingUser.user_id,
+      selectedRole,
+    );
+
     if (result.success) {
       toast({
         title: 'Role Updated',
@@ -228,34 +377,38 @@ export default function Settings() {
     } else {
       toast({
         title: 'Error',
-        description: 'Failed to update user role. You may not have admin permissions.',
+        description:
+          'Failed to update user role. You may not have admin permissions.',
         variant: 'destructive',
       });
     }
-    
+
     setRoleSubmitting(false);
     setRoleDialogOpen(false);
   };
 
   const handleUserDelete = async () => {
     if (!deletingUser) return;
-    
+
     setUserDeleteSubmitting(true);
     const result = await deleteUserRole(deletingUser.user_id);
-    
+
     if (result.success) {
       toast({
         title: 'User Deleted',
-        description: `Successfully removed ${deletingUser.display_name || 'user'} from the system`,
+        description: `Successfully removed ${
+          deletingUser.display_name || 'user'
+        } from the system`,
       });
     } else {
       toast({
         title: 'Error',
-        description: 'Failed to delete user. You may not have admin permissions.',
+        description:
+          'Failed to delete user. You may not have admin permissions.',
         variant: 'destructive',
       });
     }
-    
+
     setUserDeleteSubmitting(false);
     setUserDeleteDialogOpen(false);
     setDeletingUser(null);
@@ -270,7 +423,9 @@ export default function Settings() {
       setAwardBaseRate(award.base_hourly_rate.toString());
       setAwardSaturdayMult(award.saturday_multiplier.toString());
       setAwardSundayMult(award.sunday_multiplier.toString());
-      setAwardPublicHolidayMult(award.public_holiday_multiplier.toString());
+      setAwardPublicHolidayMult(
+        award.public_holiday_multiplier.toString(),
+      );
       setAwardEveningMult(award.evening_multiplier.toString());
       setAwardNightMult(award.night_multiplier.toString());
       setAwardOvertimeMult(award.overtime_multiplier.toString());
@@ -291,7 +446,7 @@ export default function Settings() {
 
   const handleAwardSubmit = async () => {
     if (!awardName.trim() || !awardBaseRate) return;
-    
+
     const input: AwardClassificationInput = {
       name: awardName.trim(),
       description: awardDescription.trim(),
@@ -323,7 +478,7 @@ export default function Settings() {
 
   const getDepartmentName = (departmentId: string | null) => {
     if (!departmentId) return null;
-    const dept = departments.find(d => d.id === departmentId);
+    const dept = departments.find((d) => d.id === departmentId);
     return dept?.name || null;
   };
 
@@ -347,7 +502,8 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground">
-          Manage your organization's departments, positions, award classifications, and user roles
+          Manage your organization's departments, positions, award
+          classifications, user roles and organisation settings
         </p>
       </div>
 
@@ -364,6 +520,10 @@ export default function Settings() {
           <TabsTrigger value="awards" className="flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
             Award Classifications
+          </TabsTrigger>
+          <TabsTrigger value="organisation" className="flex items-center gap-2">
+            <Building className="h-4 w-4" />
+            Organisation
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="roles" className="flex items-center gap-2">
@@ -399,7 +559,9 @@ export default function Settings() {
                 <div className="text-center py-8 text-muted-foreground">
                   <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No departments yet</p>
-                  <p className="text-sm">Add your first department to get started</p>
+                  <p className="text-sm">
+                    Add your first department to get started
+                  </p>
                 </div>
               ) : (
                 <Table>
@@ -413,15 +575,21 @@ export default function Settings() {
                   </TableHeader>
                   <TableBody>
                     {departments.map((dept) => {
-                      const positionCount = positions.filter(p => p.department_id === dept.id).length;
+                      const positionCount = positions.filter(
+                        (p) => p.department_id === dept.id,
+                      ).length;
                       return (
                         <TableRow key={dept.id}>
-                          <TableCell className="font-medium">{dept.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {dept.name}
+                          </TableCell>
                           <TableCell className="text-muted-foreground">
                             {dept.description || '—'}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="secondary">{positionCount} positions</Badge>
+                            <Badge variant="secondary">
+                              {positionCount} positions
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -474,7 +642,9 @@ export default function Settings() {
                 <div className="text-center py-8 text-muted-foreground">
                   <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No positions yet</p>
-                  <p className="text-sm">Add your first position to get started</p>
+                  <p className="text-sm">
+                    Add your first position to get started
+                  </p>
                 </div>
               ) : (
                 <Table>
@@ -555,7 +725,9 @@ export default function Settings() {
                 <div className="text-center py-8 text-muted-foreground">
                   <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No award classifications yet</p>
-                  <p className="text-sm">Add your first award classification to configure pay rates</p>
+                  <p className="text-sm">
+                    Add your first award classification to configure pay rates
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -636,6 +808,84 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
+        {/* Organisation Tab */}
+        <TabsContent value="organisation">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <div>
+                <CardTitle className="text-lg">Organisation</CardTitle>
+                <CardDescription>Manage your organisation settings</CardDescription>
+              </div>
+              <Button onClick={() => openOrgDialog()} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                {organisations.length === 0 ? 'Add Organisation' : 'Edit Organisation'}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {orgLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : organisations.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Building className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No organisation yet</p>
+                  <p className="text-sm">
+                    Add your organisation to get started
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Legal Name</TableHead>
+                      <TableHead>Trading Name</TableHead>
+                      <TableHead>Timezone</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {organisations.map((org) => (
+                      <TableRow key={org.id}>
+                        <TableCell className="font-medium">
+                          {org.legal_name}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {org.trading_name || '—'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {org.timezone || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openOrgDialog(org)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setDeletingOrganisation(org);
+                                setOrgDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* User Roles Tab - Admin Only */}
         {isAdmin && (
           <TabsContent value="roles">
@@ -647,31 +897,38 @@ export default function Settings() {
                     User Management
                   </CardTitle>
                   <CardDescription>
-                    Create user accounts and manage roles. Open signup is disabled for security.
+                    Create user accounts and manage roles. Open signup is
+                    disabled for security.
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       const csvContent = [
                         ['Name', 'Email', 'Role', 'Joined Date'].join(','),
-                        ...filteredUsers.map(user => [
-                          `"${(user.display_name || '').replace(/"/g, '""')}"`,
-                          `"${user.email.replace(/"/g, '""')}"`,
-                          user.role,
-                          new Date(user.created_at).toLocaleDateString()
-                        ].join(','))
+                        ...filteredUsers.map((user) =>
+                          [
+                            `"${(user.display_name || '').replace(/"/g, '""')}"`,
+                            `"${user.email.replace(/"/g, '""')}"`,
+                            user.role,
+                            new Date(user.created_at).toLocaleDateString(),
+                          ].join(','),
+                        ),
                       ].join('\n');
-                      
-                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+                      const blob = new Blob([csvContent], {
+                        type: 'text/csv;charset=utf-8;',
+                      });
                       const link = document.createElement('a');
                       link.href = URL.createObjectURL(blob);
-                      link.download = `users_export_${new Date().toISOString().split('T')[0]}.csv`;
+                      link.download = `users_export_${new Date()
+                        .toISOString()
+                        .split('T')[0]}.csv`;
                       link.click();
                       URL.revokeObjectURL(link.href);
-                      
+
                       toast({
                         title: 'Export Complete',
                         description: `Exported ${filteredUsers.length} users to CSV`,
@@ -682,7 +939,10 @@ export default function Settings() {
                     <Download className="h-4 w-4 mr-2" />
                     Export CSV
                   </Button>
-                  <Button onClick={() => setCreateUserDialogOpen(true)} size="sm">
+                  <Button
+                    onClick={() => setCreateUserDialogOpen(true)}
+                    size="sm"
+                  >
                     <UserPlus className="h-4 w-4 mr-2" />
                     Create User
                   </Button>
@@ -697,7 +957,9 @@ export default function Settings() {
                   <div className="text-center py-8 text-muted-foreground">
                     <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No users found</p>
-                    <p className="text-sm">Users will appear here after they sign up</p>
+                    <p className="text-sm">
+                      Users will appear here after they sign up
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -708,7 +970,9 @@ export default function Settings() {
                         <Input
                           placeholder="Search by name or email..."
                           value={userSearchQuery}
-                          onChange={(e) => setUserSearchQuery(e.target.value)}
+                          onChange={(e) =>
+                            setUserSearchQuery(e.target.value)
+                          }
                           className="pl-9 pr-9"
                         />
                         {userSearchQuery && (
@@ -724,7 +988,9 @@ export default function Settings() {
                       </div>
                       <Select
                         value={userRoleFilter}
-                        onValueChange={(value) => setUserRoleFilter(value as AppRole | 'all')}
+                        onValueChange={(value) =>
+                          setUserRoleFilter(value as AppRole | 'all')
+                        }
                       >
                         <SelectTrigger className="w-full sm:w-[180px]">
                           <SelectValue placeholder="Filter by role" />
@@ -732,8 +998,12 @@ export default function Settings() {
                         <SelectContent>
                           <SelectItem value="all">All Roles</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="manager">Manager</SelectItem>
-                          <SelectItem value="employee">Employee</SelectItem>
+                          <SelectItem value="manager">
+                            Manager
+                          </SelectItem>
+                          <SelectItem value="employee">
+                            Employee
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -742,12 +1012,15 @@ export default function Settings() {
                       <div className="text-center py-8 text-muted-foreground">
                         <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <p>No users match your search</p>
-                        <p className="text-sm">Try adjusting your search or filter criteria</p>
+                        <p className="text-sm">
+                          Try adjusting your search or filter criteria
+                        </p>
                       </div>
                     ) : (
                       <>
                         <div className="text-sm text-muted-foreground mb-2">
-                          Showing {filteredUsers.length} of {users.length} users
+                          Showing {filteredUsers.length} of {users.length}{' '}
+                          users
                         </div>
                         <Table>
                           <TableHeader>
@@ -755,7 +1028,9 @@ export default function Settings() {
                               <TableHead>User</TableHead>
                               <TableHead>Role</TableHead>
                               <TableHead>Joined</TableHead>
-                              <TableHead className="w-[100px]">Actions</TableHead>
+                              <TableHead className="w-[100px]">
+                                Actions
+                              </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -768,13 +1043,18 @@ export default function Settings() {
                                     {user.display_name || user.email}
                                   </TableCell>
                                   <TableCell>
-                                    <Badge variant={roleConfig.variant} className="flex items-center gap-1 w-fit">
+                                    <Badge
+                                      variant={roleConfig.variant}
+                                      className="flex items-center gap-1 w-fit"
+                                    >
                                       <RoleIcon className="h-3 w-3" />
                                       {roleConfig.label}
                                     </Badge>
                                   </TableCell>
                                   <TableCell className="text-muted-foreground">
-                                    {new Date(user.created_at).toLocaleDateString()}
+                                    {new Date(
+                                      user.created_at,
+                                    ).toLocaleDateString()}
                                   </TableCell>
                                   <TableCell>
                                     <div className="flex items-center gap-1">
@@ -819,6 +1099,102 @@ export default function Settings() {
         )}
       </Tabs>
 
+      {/* Organisation Dialog */}
+      <Dialog open={orgDialogOpen} onOpenChange={setOrgDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingOrganisation ? 'Edit Organisation' : 'Add Organisation'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingOrganisation
+                ? 'Update the organisation details below'
+                : 'Enter the details for the new organisation'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="org-legal-name">Legal Name *</Label>
+              <Input
+                id="org-legal-name"
+                value={orgLegalName}
+                onChange={(e) => setOrgLegalName(e.target.value)}
+                placeholder="e.g., TeamStride Pty Ltd"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="org-trading-name">Trading Name</Label>
+              <Input
+                id="org-trading-name"
+                value={orgTradingName}
+                onChange={(e) =>
+                  setOrgTradingName(e.target.value)
+                }
+                placeholder="(optional)"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="org-timezone">Timezone</Label>
+              <Input
+                id="org-timezone"
+                value={orgTimezone}
+                onChange={(e) => setOrgTimezone(e.target.value)}
+                placeholder="e.g., Australia/Sydney"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOrgDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleOrgSubmit}
+              disabled={!orgLegalName.trim() || orgSubmitting}
+            >
+              {orgSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : editingOrganisation ? (
+                'Update'
+              ) : (
+                'Add'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Organisation Delete Dialog */}
+      <AlertDialog
+        open={orgDeleteDialogOpen}
+        onOpenChange={setOrgDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Organisation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "
+              {deletingOrganisation?.legal_name}"? This action cannot
+              be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleOrgDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Department Dialog */}
       <Dialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen}>
         <DialogContent>
@@ -847,17 +1223,25 @@ export default function Settings() {
               <Textarea
                 id="dept-description"
                 value={deptDescription}
-                onChange={(e) => setDeptDescription(e.target.value)}
+                onChange={(e) =>
+                  setDeptDescription(e.target.value)
+                }
                 placeholder="Brief description of the department..."
                 rows={3}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeptDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeptDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleDeptSubmit} disabled={!deptName.trim() || deptSubmitting}>
+            <Button
+              onClick={handleDeptSubmit}
+              disabled={!deptName.trim() || deptSubmitting}
+            >
               {deptSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -874,13 +1258,18 @@ export default function Settings() {
       </Dialog>
 
       {/* Department Delete Dialog */}
-      <AlertDialog open={deptDeleteDialogOpen} onOpenChange={setDeptDeleteDialogOpen}>
+      <AlertDialog
+        open={deptDeleteDialogOpen}
+        onOpenChange={setDeptDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Department</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingDepartment?.name}"? 
-              This action cannot be undone. Positions linked to this department will have their department unset.
+              Are you sure you want to delete "
+              {deletingDepartment?.name}"? This action cannot be
+              undone. Positions linked to this department will have
+              their department unset.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -920,9 +1309,11 @@ export default function Settings() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pos-department">Department</Label>
-              <Select 
-                value={posDepartmentId || 'none'} 
-                onValueChange={(val) => setPosDepartmentId(val === 'none' ? '' : val)}
+              <Select
+                value={posDepartmentId || 'none'}
+                onValueChange={(val) =>
+                  setPosDepartmentId(val === 'none' ? '' : val)
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a department (optional)" />
@@ -949,10 +1340,16 @@ export default function Settings() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPosDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setPosDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handlePosSubmit} disabled={!posName.trim() || posSubmitting}>
+            <Button
+              onClick={handlePosSubmit}
+              disabled={!posName.trim() || posSubmitting}
+            >
               {posSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -969,13 +1366,17 @@ export default function Settings() {
       </Dialog>
 
       {/* Position Delete Dialog */}
-      <AlertDialog open={posDeleteDialogOpen} onOpenChange={setPosDeleteDialogOpen}>
+      <AlertDialog
+        open={posDeleteDialogOpen}
+        onOpenChange={setPosDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Position</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingPosition?.name}"? 
-              This action cannot be undone.
+              Are you sure you want to delete "
+              {deletingPosition?.name}"? This action cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1002,7 +1403,10 @@ export default function Settings() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={selectedRole} onValueChange={(val) => setSelectedRole(val as AppRole)}>
+              <Select
+                value={selectedRole}
+                onValueChange={(val) => setSelectedRole(val as AppRole)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -1014,7 +1418,7 @@ export default function Settings() {
                     </div>
                   </SelectItem>
                   <SelectItem value="manager">
-                    <div className="flex items-center gap-2">
+                    <div className="flex itemsers gap-2">
                       <Shield className="h-4 w-4" />
                       Manager - Manage employees and operations
                     </div>
@@ -1030,10 +1434,16 @@ export default function Settings() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setRoleDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleRoleSubmit} disabled={roleSubmitting}>
+            <Button
+              onClick={handleRoleSubmit}
+              disabled={roleSubmitting}
+            >
               {roleSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1052,7 +1462,9 @@ export default function Settings() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingAward ? 'Edit Award Classification' : 'Add Award Classification'}
+              {editingAward
+                ? 'Edit Award Classification'
+                : 'Add Award Classification'}
             </DialogTitle>
             <DialogDescription>
               {editingAward
@@ -1072,7 +1484,9 @@ export default function Settings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="award-base-rate">Base Hourly Rate (AUD) *</Label>
+                <Label htmlFor="award-base-rate">
+                  Base Hourly Rate (AUD) *
+                </Label>
                 <Input
                   id="award-base-rate"
                   type="number"
@@ -1084,24 +1498,29 @@ export default function Settings() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="award-description">Description</Label>
               <Textarea
                 id="award-description"
                 value={awardDescription}
-                onChange={(e) => setAwardDescription(e.target.value)}
+                onChange={(e) =>
+                  setAwardDescription(e.target.value)
+                }
                 placeholder="Brief description of this award level..."
                 rows={2}
               />
             </div>
 
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Penalty Rate Multipliers</Label>
+              <Label className="text-base font-semibold">
+                Penalty Rate Multipliers
+              </Label>
               <p className="text-sm text-muted-foreground">
-                These multipliers are applied to the base hourly rate for different work conditions
+                These multipliers are applied to the base hourly
+                rate for different work conditions
               </p>
-              
+
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="award-sat">Saturday</Label>
@@ -1111,7 +1530,9 @@ export default function Settings() {
                     step="0.01"
                     min="1"
                     value={awardSaturdayMult}
-                    onChange={(e) => setAwardSaturdayMult(e.target.value)}
+                    onChange={(e) =>
+                      setAwardSaturdayMult(e.target.value)
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -1122,7 +1543,9 @@ export default function Settings() {
                     step="0.01"
                     min="1"
                     value={awardSundayMult}
-                    onChange={(e) => setAwardSundayMult(e.target.value)}
+                    onChange={(e) =>
+                      setAwardSundayMult(e.target.value)
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -1133,7 +1556,9 @@ export default function Settings() {
                     step="0.01"
                     min="1"
                     value={awardPublicHolidayMult}
-                    onChange={(e) => setAwardPublicHolidayMult(e.target.value)}
+                    onChange={(e) =>
+                      setAwardPublicHolidayMult(e.target.value)
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -1144,7 +1569,9 @@ export default function Settings() {
                     step="0.01"
                     min="1"
                     value={awardEveningMult}
-                    onChange={(e) => setAwardEveningMult(e.target.value)}
+                    onChange={(e) =>
+                      setAwardEveningMult(e.target.value)
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -1155,7 +1582,9 @@ export default function Settings() {
                     step="0.01"
                     min="1"
                     value={awardNightMult}
-                    onChange={(e) => setAwardNightMult(e.target.value)}
+                    onChange={(e) =>
+                      setAwardNightMult(e.target.value)
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -1166,19 +1595,26 @@ export default function Settings() {
                     step="0.01"
                     min="1"
                     value={awardOvertimeMult}
-                    onChange={(e) => setAwardOvertimeMult(e.target.value)}
+                    onChange={(e) =>
+                      setAwardOvertimeMult(e.target.value)
+                    }
                   />
                 </div>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAwardDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setAwardDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button 
-              onClick={handleAwardSubmit} 
-              disabled={!awardName.trim() || !awardBaseRate || awardSubmitting}
+            <Button
+              onClick={handleAwardSubmit}
+              disabled={
+                !awardName.trim() || !awardBaseRate || awardSubmitting
+              }
             >
               {awardSubmitting ? (
                 <>
@@ -1196,13 +1632,18 @@ export default function Settings() {
       </Dialog>
 
       {/* Award Classification Delete Dialog */}
-      <AlertDialog open={awardDeleteDialogOpen} onOpenChange={setAwardDeleteDialogOpen}>
+      <AlertDialog
+        open={awardDeleteDialogOpen}
+        onOpenChange={setAwardDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Award Classification</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete Award Classification
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingAward?.name}"? 
-              This action cannot be undone.
+              Are you sure you want to delete "
+              {deletingAward?.name}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1218,17 +1659,26 @@ export default function Settings() {
       </AlertDialog>
 
       {/* User Delete Dialog */}
-      <AlertDialog open={userDeleteDialogOpen} onOpenChange={setUserDeleteDialogOpen}>
+      <AlertDialog
+        open={userDeleteDialogOpen}
+        onOpenChange={setUserDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete User</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingUser?.display_name || deletingUser?.email}"? 
-              This will remove their role and access to the system. This action cannot be undone.
+              Are you sure you want to delete "
+              {deletingUser?.display_name || deletingUser?.email}"? This will remove
+              their role and access to the system. This action cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={userDeleteSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              disabled={userDeleteSubmitting}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleUserDelete}
               disabled={userDeleteSubmitting}

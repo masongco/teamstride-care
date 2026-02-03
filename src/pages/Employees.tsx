@@ -1,5 +1,14 @@
-import React, { useState } from 'react';
-import { Search, Plus, MoreHorizontal, Mail, Phone, Download, UserX, Loader2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  Search,
+  Plus,
+  MoreHorizontal,
+  Mail,
+  Phone,
+  Download,
+  UserX,
+  Loader2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,8 +35,14 @@ import { EmployeeDetailSheet } from '@/components/employees/EmployeeDetailSheet'
 import { toast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
-import type { EmployeeDB, EmploymentTypeDB, EmployeeStatusDB, ComplianceStatusDB } from '@/types/database';
+import type {
+  EmployeeDB,
+  EmploymentTypeDB,
+  EmployeeStatusDB,
+  ComplianceStatusDB,
+} from '@/types/database';
 import type { Employee } from '@/types/hrms';
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
@@ -61,18 +76,40 @@ function dbToLegacyEmployee(emp: EmployeeDB): Employee {
     complianceStatus: emp.compliance_status as ComplianceStatus,
     payRate: emp.pay_rate || 0,
     awardClassification: undefined,
-    emergencyContact: emp.emergency_contact_name ? {
-      name: emp.emergency_contact_name,
-      phone: emp.emergency_contact_phone || '',
-      relationship: emp.emergency_contact_relationship || '',
-    } : undefined,
+    emergencyContact: emp.emergency_contact_name
+      ? {
+          name: emp.emergency_contact_name,
+          phone: emp.emergency_contact_phone || '',
+          relationship: emp.emergency_contact_relationship || '',
+        }
+      : undefined,
     documents: [],
     certifications: [],
   };
 }
 
+function friendlySupabaseError(err: any) {
+  const msg =
+    err?.message ||
+    err?.error_description ||
+    err?.details ||
+    'You may not have permission to do that.';
+  // Typical RLS error strings contain "permission denied" or "violates row-level security"
+  if (typeof msg === 'string' && msg.toLowerCase().includes('row-level security')) {
+    return 'Permission blocked by security policy. Check your role and organisation.';
+  }
+  return msg;
+}
+
 export default function Employees() {
-  const { isManager } = useUserRole();
+  const { user } = useAuth();
+  const roles = useUserRole();
+
+  // These names may differ in your hook. We safely coerce.
+  const isManager = Boolean((roles as any)?.isManager);
+  const isAdmin = Boolean((roles as any)?.isAdmin);
+  const isPlatformUser = Boolean((roles as any)?.isPlatformUser); // optional, but recommended
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -91,25 +128,40 @@ export default function Employees() {
     isCreating,
   } = useSupabaseEmployees();
 
+  // Who is allowed by your current employees RLS
+  const canManageEmployees = isPlatformUser || isAdmin || isManager;
+
+  // If you enforce org-scoped RLS, non-platform users must have an organisation_id
+  const canCreateEmployee =
+    canManageEmployees && (Boolean(organisationId) || isPlatformUser);
+
   // Convert DB employees to legacy format for UI compatibility
-  const employees = dbEmployees.map(dbToLegacyEmployee);
+  const employees = useMemo(() => dbEmployees.map(dbToLegacyEmployee), [dbEmployees]);
 
-  const filteredEmployees = employees.filter((employee) => {
-    // Exclude inactive/deactivated employees from the main list
-    if (employee.status === 'inactive') return false;
-    
-    const matchesSearch =
-      `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.position.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesDepartment = filterDepartment === 'all' || employee.department === filterDepartment;
-    const matchesStatus = filterStatus === 'all' || employee.status === filterStatus;
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((employee) => {
+      // Exclude inactive/deactivated employees from the main list
+      if (employee.status === 'inactive') return false;
 
-    return matchesSearch && matchesDepartment && matchesStatus;
-  });
+      const matchesSearch =
+        `${employee.firstName} ${employee.lastName}`
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.position.toLowerCase().includes(searchQuery.toLowerCase());
 
-  const departments = [...new Set(employees.map((e) => e.department).filter(Boolean))];
+      const matchesDepartment =
+        filterDepartment === 'all' || employee.department === filterDepartment;
+      const matchesStatus = filterStatus === 'all' || employee.status === filterStatus;
+
+      return matchesSearch && matchesDepartment && matchesStatus;
+    });
+  }, [employees, searchQuery, filterDepartment, filterStatus]);
+
+  const departments = useMemo(
+    () => [...new Set(employees.map((e) => e.department).filter(Boolean))],
+    [employees]
+  );
 
   const handleViewProfile = (employee: Employee) => {
     setSelectedEmployee(employee);
@@ -117,9 +169,17 @@ export default function Employees() {
   };
 
   const handleUpdateEmployee = async (updatedEmployee: Employee) => {
-    if (!organisationId) return;
-    
-    const dbEmployee = dbEmployees.find(e => e.id === updatedEmployee.id);
+    // Non-platform users without org should not be able to update; platform users may.
+    if (!isPlatformUser && !organisationId) {
+      toast({
+        title: 'No organisation',
+        description: 'Create or join an organisation before editing employees.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const dbEmployee = dbEmployees.find((e) => e.id === updatedEmployee.id);
     if (!dbEmployee) return;
 
     try {
@@ -136,20 +196,42 @@ export default function Employees() {
         compliance_status: updatedEmployee.complianceStatus as ComplianceStatusDB,
         emergency_contact_name: updatedEmployee.emergencyContact?.name || null,
         emergency_contact_phone: updatedEmployee.emergencyContact?.phone || null,
-        emergency_contact_relationship: updatedEmployee.emergencyContact?.relationship || null,
+        emergency_contact_relationship:
+          updatedEmployee.emergencyContact?.relationship || null,
+        // NOTE: do NOT update organisation_id here (RLS / triggers should keep it immutable)
       });
+
       setSelectedEmployee(updatedEmployee);
-    } catch (err) {
+      toast({
+        title: 'Saved',
+        description: 'Employee details updated.',
+      });
+    } catch (err: any) {
       console.error('Failed to update employee:', err);
+      toast({
+        title: 'Update blocked',
+        description: friendlySupabaseError(err),
+        variant: 'destructive',
+      });
     }
   };
 
   const handleDeactivateEmployee = async (employee: Employee) => {
     const newStatus = employee.status === 'inactive' ? 'active' : 'inactive';
+
     try {
       await changeStatus(employee.id, newStatus as EmployeeStatusDB);
-    } catch (err) {
+      toast({
+        title: employee.status === 'inactive' ? 'Reactivated' : 'Deactivated',
+        description: `${employee.firstName} ${employee.lastName} is now ${newStatus}.`,
+      });
+    } catch (err: any) {
       console.error('Failed to change status:', err);
+      toast({
+        title: 'Action blocked',
+        description: friendlySupabaseError(err),
+        variant: 'destructive',
+      });
     }
   };
 
@@ -164,18 +246,38 @@ export default function Employees() {
     payRate: number;
     avatar?: string;
   }) => {
-    if (!organisationId) {
+    if (!user) {
       toast({
-        title: 'Error',
-        description: 'Organisation not available. Please try again.',
+        title: 'Not signed in',
+        description: 'You must be signed in to add employees.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!canManageEmployees) {
+      toast({
+        title: 'Permission denied',
+        description: 'Only admins/managers can add employees.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!isPlatformUser && !organisationId) {
+      toast({
+        title: 'No organisation yet',
+        description: 'Create your organisation first, then add employees.',
         variant: 'destructive',
       });
       return;
     }
 
     try {
+      // IMPORTANT:
+      // Do NOT pass organisation_id from the client if your DB trigger sets it.
+      // RLS will enforce that the inserted row belongs to your org anyway.
       await createEmployee({
-        organisation_id: organisationId,
         first_name: newEmployee.firstName,
         last_name: newEmployee.lastName,
         email: newEmployee.email,
@@ -187,9 +289,66 @@ export default function Employees() {
         pay_rate: newEmployee.payRate || undefined,
         start_date: new Date().toISOString().split('T')[0],
       });
+
       setAddDialogOpen(false);
-    } catch (err) {
+      toast({
+        title: 'Employee added',
+        description: `${newEmployee.firstName} ${newEmployee.lastName} was created.`,
+      });
+    } catch (err: any) {
       console.error('Failed to add employee:', err);
+      toast({
+        title: 'Create blocked',
+        description: friendlySupabaseError(err),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleExport = () => {
+    // RLS already limits what you can see; export only exports what you can fetch.
+    // Basic CSV export in-browser:
+    try {
+      const rows = filteredEmployees.map((e) => ({
+        firstName: e.firstName,
+        lastName: e.lastName,
+        email: e.email,
+        phone: e.phone,
+        position: e.position,
+        department: e.department,
+        employmentType: e.employmentType,
+        status: e.status,
+        complianceStatus: e.complianceStatus,
+        payRate: e.payRate,
+      }));
+
+      const headers = Object.keys(rows[0] || {});
+      const csv = [
+        headers.join(','),
+        ...rows.map((r) =>
+          headers
+            .map((h) => {
+              const v = (r as any)[h] ?? '';
+              const s = String(v).replace(/"/g, '""');
+              return `"${s}"`;
+            })
+            .join(',')
+        ),
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'employees.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast({
+        title: 'Export failed',
+        description: 'Unable to export employees.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -223,7 +382,13 @@ export default function Employees() {
           <p className="text-muted-foreground mt-1">
             Manage your team members and their information.
           </p>
+          {!isPlatformUser && !organisationId && (
+            <p className="text-sm text-warning mt-2">
+              You don&apos;t have an organisation yet. Create one before adding employees.
+            </p>
+          )}
         </div>
+
         <div className="flex gap-2">
           {isManager && (
             <Button variant="outline" asChild>
@@ -233,11 +398,18 @@ export default function Employees() {
               </Link>
             </Button>
           )}
-          <Button variant="outline">
+
+          <Button variant="outline" onClick={handleExport} disabled={filteredEmployees.length === 0}>
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button className="gradient-primary" onClick={() => setAddDialogOpen(true)} disabled={isCreating}>
+
+          <Button
+            className="gradient-primary"
+            onClick={() => setAddDialogOpen(true)}
+            disabled={!canCreateEmployee || isCreating}
+            title={!canCreateEmployee ? 'You do not have permission or an organisation yet.' : undefined}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Employee
           </Button>
@@ -258,6 +430,7 @@ export default function Employees() {
                 className="pl-10"
               />
             </div>
+
             <Select value={filterDepartment} onValueChange={setFilterDepartment}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Department" />
@@ -271,6 +444,7 @@ export default function Employees() {
                 ))}
               </SelectContent>
             </Select>
+
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-full sm:w-36">
                 <SelectValue placeholder="Status" />
@@ -288,8 +462,8 @@ export default function Employees() {
       {/* Employee Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredEmployees.map((employee) => (
-          <Card 
-            key={employee.id} 
+          <Card
+            key={employee.id}
             className="card-interactive cursor-pointer"
             onClick={() => handleViewProfile(employee)}
           >
@@ -320,25 +494,58 @@ export default function Employees() {
                     </div>
                   </div>
                 </div>
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
+
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewProfile(employee); }}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewProfile(employee);
+                      }}
+                    >
                       View Profile
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => e.stopPropagation()}>Edit Details</DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => e.stopPropagation()}>View Documents</DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      className={employee.status === 'inactive' ? 'text-success' : 'text-destructive'} 
-                      onClick={(e) => { e.stopPropagation(); handleDeactivateEmployee(employee); }}
-                    >
-                      {employee.status === 'inactive' ? 'Reactivate' : 'Deactivate'}
-                    </DropdownMenuItem>
+
+                    {/* Hide edit actions if user cannot manage employees */}
+                    {canManageEmployees ? (
+                      <>
+                        <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                          Edit Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                          View Documents
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className={employee.status === 'inactive' ? 'text-success' : 'text-destructive'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeactivateEmployee(employee);
+                          }}
+                        >
+                          {employee.status === 'inactive' ? 'Reactivate' : 'Deactivate'}
+                        </DropdownMenuItem>
+                      </>
+                    ) : (
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toast({
+                            title: 'Permission denied',
+                            description: 'You do not have permission to modify employees.',
+                            variant: 'destructive',
+                          });
+                        }}
+                      >
+                        No actions available
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -359,9 +566,9 @@ export default function Employees() {
               </div>
 
               <div className="mt-4 pt-4 border-t border-border flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="flex-1"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -371,9 +578,9 @@ export default function Employees() {
                   <Mail className="h-4 w-4 mr-1" />
                   Email
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="flex-1"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -398,11 +605,7 @@ export default function Employees() {
       )}
 
       {/* Add Employee Dialog */}
-      <AddEmployeeDialog
-        open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
-        onAdd={handleAddEmployee}
-      />
+      <AddEmployeeDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} onAdd={handleAddEmployee} />
 
       {/* Employee Detail Sheet */}
       <EmployeeDetailSheet

@@ -3,13 +3,24 @@
 
 export type EmploymentTypeDB = 'casual' | 'part_time' | 'full_time' | 'contractor';
 
-export type EmployeeStatusDB = 'active' | 'inactive' | 'onboarding' | 'offboarding' | 'terminated';
+export type EmployeeStatusDB =
+  | 'active'
+  | 'inactive'
+  | 'onboarding'
+  | 'offboarding'
+  | 'terminated';
 
 export type ComplianceStatusDB = 'compliant' | 'expiring' | 'expired' | 'pending';
 
 export type TimesheetStatus = 'pending' | 'approved' | 'rejected';
 
-export type LeaveType = 'annual' | 'personal' | 'unpaid' | 'compassionate' | 'parental' | 'other';
+export type LeaveType =
+  | 'annual'
+  | 'personal'
+  | 'unpaid'
+  | 'compassionate'
+  | 'parental'
+  | 'other';
 
 export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
@@ -86,24 +97,35 @@ export interface LeaveRequestDB {
 
 // Input types for creating/updating records
 export interface CreateEmployeeInput {
-  organisation_id: string;
+  /**
+   * organisation_id is OPTIONAL because the database (trigger/RLS)
+   * should attach the current user's organisation automatically.
+   * Platform admins may still pass it explicitly if needed.
+   */
+  organisation_id?: string;
+
   first_name: string;
   last_name: string;
   email: string;
+
   phone?: string;
   avatar_url?: string;
+
   employment_type: EmploymentTypeDB;
   position?: string;
   department?: string;
+
   start_date?: string;
   pay_rate?: number;
+
   award_classification_id?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relationship?: string;
 }
 
-export interface UpdateEmployeeInput extends Partial<Omit<EmployeeDB, 'id' | 'organisation_id' | 'created_at' | 'updated_at'>> {}
+export interface UpdateEmployeeInput
+  extends Partial<Omit<EmployeeDB, 'id' | 'organisation_id' | 'created_at' | 'updated_at'>> {}
 
 export interface CreateTimesheetInput {
   organisation_id: string;
