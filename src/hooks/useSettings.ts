@@ -6,6 +6,7 @@ export interface Department {
   id: string;
   name: string;
   description: string | null;
+  organisation_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -15,6 +16,7 @@ export interface Position {
   name: string;
   department_id: string | null;
   description: string | null;
+  organisation_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +32,7 @@ export interface AwardClassification {
   evening_multiplier: number;
   night_multiplier: number;
   overtime_multiplier: number;
+  organisation_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,17 +49,27 @@ export interface AwardClassificationInput {
   overtime_multiplier?: number;
 }
 
-export function useSettings() {
+export function useSettings(
+  organisationId?: string,
+  options?: { requireOrganisation?: boolean },
+) {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [awardClassifications, setAwardClassifications] = useState<AwardClassification[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const shouldBlockQueries = options?.requireOrganisation && !organisationId;
+
   const fetchDepartments = async () => {
-    const { data, error } = await supabase
-      .from('departments')
-      .select('*')
-      .order('name');
+    if (shouldBlockQueries) {
+      setDepartments([]);
+      return;
+    }
+    let query = supabase.from('departments').select('*').order('name');
+    if (organisationId) {
+      query = query.eq('organisation_id', organisationId);
+    }
+    const { data, error } = await query;
     
     if (error) {
       toast({
@@ -70,10 +83,15 @@ export function useSettings() {
   };
 
   const fetchPositions = async () => {
-    const { data, error } = await supabase
-      .from('positions')
-      .select('*')
-      .order('name');
+    if (shouldBlockQueries) {
+      setPositions([]);
+      return;
+    }
+    let query = supabase.from('positions').select('*').order('name');
+    if (organisationId) {
+      query = query.eq('organisation_id', organisationId);
+    }
+    const { data, error } = await query;
     
     if (error) {
       toast({
@@ -87,10 +105,18 @@ export function useSettings() {
   };
 
   const fetchAwardClassifications = async () => {
-    const { data, error } = await supabase
+    if (shouldBlockQueries) {
+      setAwardClassifications([]);
+      return;
+    }
+    let query = supabase
       .from('award_classifications')
       .select('*')
       .order('name');
+    if (organisationId) {
+      query = query.eq('organisation_id', organisationId);
+    }
+    const { data, error } = await query;
     
     if (error) {
       toast({
@@ -106,16 +132,28 @@ export function useSettings() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchDepartments(), fetchPositions(), fetchAwardClassifications()]);
+      if (shouldBlockQueries) {
+        setLoading(false);
+        return;
+      }
+      await Promise.all([
+        fetchDepartments(),
+        fetchPositions(),
+        fetchAwardClassifications(),
+      ]);
       setLoading(false);
     };
     loadData();
-  }, []);
+  }, [organisationId, shouldBlockQueries]);
 
   const addDepartment = async (name: string, description?: string) => {
     const { data, error } = await supabase
       .from('departments')
-      .insert({ name, description: description || null })
+      .insert({
+        name,
+        description: description || null,
+        ...(organisationId ? { organisation_id: organisationId } : {}),
+      })
       .select()
       .single();
 
@@ -200,7 +238,8 @@ export function useSettings() {
       .insert({ 
         name, 
         department_id: departmentId || null,
-        description: description || null 
+        description: description || null,
+        ...(organisationId ? { organisation_id: organisationId } : {}),
       })
       .select()
       .single();
@@ -298,6 +337,7 @@ export function useSettings() {
         evening_multiplier: input.evening_multiplier ?? 1.15,
         night_multiplier: input.night_multiplier ?? 1.25,
         overtime_multiplier: input.overtime_multiplier ?? 1.5,
+        ...(organisationId ? { organisation_id: organisationId } : {}),
       })
       .select()
       .single();

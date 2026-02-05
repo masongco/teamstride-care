@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   useSettings,
   Department,
@@ -12,6 +12,7 @@ import {
   AppRole,
   UserWithRole,
 } from '@/hooks/useUserRole';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Card,
   CardContent,
@@ -84,6 +85,8 @@ import {
   useOrganisationsManagement,
   Organisation,
 } from '@/hooks/useOrganisationsManagement';
+import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 const ROLE_CONFIG: Record<
   AppRole,
@@ -99,23 +102,14 @@ const ROLE_CONFIG: Record<
 };
 
 export default function Settings() {
+  const { user } = useAuth();
   const {
-    departments,
-    positions,
-    awardClassifications,
-    loading,
-    addDepartment,
-    updateDepartment,
-    deleteDepartment,
-    addPosition,
-    updatePosition,
-    deletePosition,
-    addAwardClassification,
-    updateAwardClassification,
-    deleteAwardClassification,
-  } = useSettings();
-
-  const { isAdmin, loading: roleLoading } = useUserRole();
+    currentUserRole,
+    isAdmin,
+    isEmployee,
+    isPlatformAdmin,
+    loading: roleLoading,
+  } = useUserRole();
   const {
     users,
     loading: usersLoading,
@@ -124,6 +118,9 @@ export default function Settings() {
     fetchUsersWithRoles,
   } = useUserRolesManagement();
 
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
+  const [orgIdLoading, setOrgIdLoading] = useState(true);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   // Organisations state and handlers
   const {
     organisations,
@@ -131,7 +128,9 @@ export default function Settings() {
     addOrganisation,
     updateOrganisation,
     deleteOrganisation,
-  } = useOrganisationsManagement();
+  } = useOrganisationsManagement(
+    isPlatformAdmin ? undefined : currentOrgId ?? undefined,
+  );
   const [orgDialogOpen, setOrgDialogOpen] = useState(false);
   const [orgDeleteDialogOpen, setOrgDeleteDialogOpen] = useState(false);
   const [editingOrganisation, setEditingOrganisation] =
@@ -142,6 +141,65 @@ export default function Settings() {
   const [orgTradingName, setOrgTradingName] = useState('');
   const [orgTimezone, setOrgTimezone] = useState('Australia/Sydney');
   const [orgSubmitting, setOrgSubmitting] = useState(false);
+
+  useEffect(() => {
+    const fetchOrganisationId = async () => {
+      if (!user) {
+        setCurrentOrgId(null);
+        setOrgIdLoading(false);
+        return;
+      }
+
+      setOrgIdLoading(true);
+      const { data, error } = await supabase.rpc(
+        'get_user_organisation_id',
+        { _user_id: user.id },
+      );
+
+      if (error) {
+        console.error('Error fetching organisation id:', error);
+        setCurrentOrgId(null);
+      } else {
+        setCurrentOrgId(data ?? null);
+      }
+      setOrgIdLoading(false);
+    };
+
+    fetchOrganisationId();
+  }, [user]);
+
+  const selectedOrganisation = organisations.find(
+    (org) => org.id === selectedOrgId,
+  );
+  const settingsOrganisationId = isPlatformAdmin
+    ? selectedOrgId ?? undefined
+    : currentOrgId ?? undefined;
+  const requireOrganisation =
+    isPlatformAdmin || currentUserRole === 'admin' || currentUserRole === 'manager';
+  const shouldBlockSettings =
+    roleLoading || orgIdLoading || (isPlatformAdmin && !selectedOrgId);
+  const effectiveOrgId = shouldBlockSettings
+    ? undefined
+    : settingsOrganisationId;
+  const hasOrgContext = Boolean(effectiveOrgId);
+
+  const settings = useSettings(effectiveOrgId, {
+    requireOrganisation: shouldBlockSettings || requireOrganisation,
+  });
+  const {
+    departments,
+    positions,
+    awardClassifications,
+    addDepartment,
+    updateDepartment,
+    deleteDepartment,
+    addPosition,
+    updatePosition,
+    deletePosition,
+    addAwardClassification,
+    updateAwardClassification,
+    deleteAwardClassification,
+  } = settings;
 
   const openOrgDialog = (organisation?: Organisation) => {
     if (organisation) {
@@ -489,10 +547,32 @@ export default function Settings() {
     }).format(amount);
   };
 
-  if (loading || roleLoading) {
+  if (settings.loading || roleLoading || orgIdLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isEmployee && !isAdmin && !isPlatformAdmin) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Settings</h1>
+          <p className="text-muted-foreground">
+            Settings are managed by your administrator.
+          </p>
+        </div>
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground">
+            <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>You don’t have access to organisation settings.</p>
+            <p className="text-sm">
+              If you need changes, contact your admin.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -505,39 +585,141 @@ export default function Settings() {
           Manage your organization's departments, positions, award
           classifications, user roles and organisation settings
         </p>
+        {isPlatformAdmin && selectedOrganisation && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Viewing organisation:{' '}
+            <span className="font-medium text-foreground">
+              {selectedOrganisation.legal_name}
+            </span>
+          </p>
+        )}
       </div>
 
-      <Tabs defaultValue="departments" className="space-y-4">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="departments" className="flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            Departments
-          </TabsTrigger>
-          <TabsTrigger value="positions" className="flex items-center gap-2">
-            <Briefcase className="h-4 w-4" />
-            Positions
-          </TabsTrigger>
-          <TabsTrigger value="awards" className="flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
-            Award Classifications
-          </TabsTrigger>
-          <TabsTrigger value="organisation" className="flex items-center gap-2">
-            <Building className="h-4 w-4" />
-            Organisation
-          </TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger value="roles" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              User Roles
+      {isPlatformAdmin && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div>
+              <CardTitle className="text-lg">Organisations</CardTitle>
+              <CardDescription>
+                Select an organisation to manage its settings
+              </CardDescription>
+            </div>
+            <Button onClick={() => openOrgDialog()} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Organisation
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {orgLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : organisations.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Building className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No organisations yet</p>
+                <p className="text-sm">
+                  Add your first organisation to get started
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Legal Name</TableHead>
+                    <TableHead>Trading Name</TableHead>
+                    <TableHead>Timezone</TableHead>
+                    <TableHead className="w-[120px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {organisations.map((org) => (
+                    <TableRow
+                      key={org.id}
+                      className={cn(
+                        'cursor-pointer',
+                        selectedOrgId === org.id && 'bg-muted/50',
+                      )}
+                      onClick={() => setSelectedOrgId(org.id)}
+                    >
+                      <TableCell className="font-medium">
+                        {org.legal_name}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {org.trading_name || '—'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {org.timezone || '—'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openOrgDialog(org);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setDeletingOrganisation(org);
+                              setOrgDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isPlatformAdmin && !selectedOrgId ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>Select an organisation to view settings.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs defaultValue="departments" className="space-y-4">
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="departments" className="flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Departments
             </TabsTrigger>
-          )}
-          {isAdmin && (
-            <TabsTrigger value="navigation" className="flex items-center gap-2">
-              <LayoutGrid className="h-4 w-4" />
-              Navigation
+            <TabsTrigger value="positions" className="flex items-center gap-2">
+              <Briefcase className="h-4 w-4" />
+              Positions
             </TabsTrigger>
-          )}
-        </TabsList>
+            <TabsTrigger value="awards" className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Award Classifications
+            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="roles" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                User Roles
+              </TabsTrigger>
+            )}
+            {isAdmin && (
+              <TabsTrigger value="navigation" className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                Navigation
+              </TabsTrigger>
+            )}
+          </TabsList>
 
         {/* Departments Tab */}
         <TabsContent value="departments">
@@ -549,13 +731,18 @@ export default function Settings() {
                   Manage the departments in your organization
                 </CardDescription>
               </div>
-              <Button onClick={() => openDeptDialog()} size="sm">
+              <Button onClick={() => openDeptDialog()} size="sm" disabled={!hasOrgContext}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Department
               </Button>
             </CardHeader>
             <CardContent>
-              {departments.length === 0 ? (
+              {!hasOrgContext ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Select an organisation to view departments</p>
+                </div>
+              ) : departments.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No departments yet</p>
@@ -632,13 +819,18 @@ export default function Settings() {
                   Manage the job positions in your organization
                 </CardDescription>
               </div>
-              <Button onClick={() => openPosDialog()} size="sm">
+              <Button onClick={() => openPosDialog()} size="sm" disabled={!hasOrgContext}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Position
               </Button>
             </CardHeader>
             <CardContent>
-              {positions.length === 0 ? (
+              {!hasOrgContext ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Select an organisation to view positions</p>
+                </div>
+              ) : positions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No positions yet</p>
@@ -715,13 +907,18 @@ export default function Settings() {
                   Configure pay rates and penalty multipliers for different award levels
                 </CardDescription>
               </div>
-              <Button onClick={() => openAwardDialog()} size="sm">
+              <Button onClick={() => openAwardDialog()} size="sm" disabled={!hasOrgContext}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Classification
               </Button>
             </CardHeader>
             <CardContent>
-              {awardClassifications.length === 0 ? (
+              {!hasOrgContext ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Select an organisation to view award classifications</p>
+                </div>
+              ) : awardClassifications.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No award classifications yet</p>
@@ -803,84 +1000,6 @@ export default function Settings() {
                     </TableBody>
                   </Table>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Organisation Tab */}
-        <TabsContent value="organisation">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <div>
-                <CardTitle className="text-lg">Organisation</CardTitle>
-                <CardDescription>Manage your organisation settings</CardDescription>
-              </div>
-              <Button onClick={() => openOrgDialog()} size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                {organisations.length === 0 ? 'Add Organisation' : 'Edit Organisation'}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {orgLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : organisations.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Building className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No organisation yet</p>
-                  <p className="text-sm">
-                    Add your organisation to get started
-                  </p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Legal Name</TableHead>
-                      <TableHead>Trading Name</TableHead>
-                      <TableHead>Timezone</TableHead>
-                      <TableHead className="w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {organisations.map((org) => (
-                      <TableRow key={org.id}>
-                        <TableCell className="font-medium">
-                          {org.legal_name}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {org.trading_name || '—'}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {org.timezone || '—'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openOrgDialog(org)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setDeletingOrganisation(org);
-                                setOrgDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
               )}
             </CardContent>
           </Card>
@@ -1097,7 +1216,8 @@ export default function Settings() {
             <SidebarSettingsTab />
           </TabsContent>
         )}
-      </Tabs>
+        </Tabs>
+      )}
 
       {/* Organisation Dialog */}
       <Dialog open={orgDialogOpen} onOpenChange={setOrgDialogOpen}>

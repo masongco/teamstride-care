@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import type { Database } from '@/integrations/supabase/types';
 
 export type AppRole = 'admin' | 'manager' | 'employee';
+type PlatformRole = Database['public']['Enums']['platform_role'];
 
 export interface UserWithRole {
   id: string;
@@ -16,36 +18,59 @@ export interface UserWithRole {
 export function useUserRole() {
   const { user } = useAuth();
   const [currentUserRole, setCurrentUserRole] = useState<AppRole | null>(null);
+  const [platformRole, setPlatformRole] = useState<PlatformRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
-      fetchCurrentUserRole();
+      fetchRoles();
     } else {
       setCurrentUserRole(null);
+      setPlatformRole(null);
       setLoading(false);
     }
   }, [user]);
 
-  const fetchCurrentUserRole = async () => {
+  const fetchRoles = async () => {
     if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching user role:', error);
+    setLoading(true);
+    try {
+      const [appRoleResult, platformRoleResult] = await Promise.all([
+        supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase.rpc('get_platform_role', { _user_id: user.id }),
+      ]);
+
+      if (appRoleResult.error) {
+        console.error('Error fetching user role:', appRoleResult.error);
         setCurrentUserRole('employee');
       } else {
-        setCurrentUserRole(data?.role as AppRole || 'employee');
+        setCurrentUserRole(
+          (appRoleResult.data?.role as AppRole) || 'employee',
+        );
+      }
+
+      if (platformRoleResult.error) {
+        // No platform role is a valid state; only log unexpected errors.
+        const message = platformRoleResult.error.message || '';
+        if (!message.toLowerCase().includes('not found')) {
+          console.error(
+            'Error fetching platform role:',
+            platformRoleResult.error,
+          );
+        }
+        setPlatformRole(null);
+      } else {
+        setPlatformRole(platformRoleResult.data as PlatformRole | null);
       }
     } catch (error) {
-      console.error('Error fetching user role:', error);
+      console.error('Error fetching user roles:', error);
       setCurrentUserRole('employee');
+      setPlatformRole(null);
     } finally {
       setLoading(false);
     }
@@ -54,6 +79,9 @@ export function useUserRole() {
   const isAdmin = currentUserRole === 'admin';
   const isManager = currentUserRole === 'manager' || currentUserRole === 'admin';
   const isEmployee = currentUserRole === 'employee';
+  const isPlatformUser = Boolean(platformRole);
+  const isPlatformAdmin =
+    platformRole === 'admin' || platformRole === 'owner';
 
   const hasPermission = (requiredRole: AppRole): boolean => {
     if (!currentUserRole) return false;
@@ -69,12 +97,15 @@ export function useUserRole() {
 
   return {
     currentUserRole,
+    platformRole,
     loading,
     isAdmin,
     isManager,
     isEmployee,
+    isPlatformUser,
+    isPlatformAdmin,
     hasPermission,
-    refetch: fetchCurrentUserRole,
+    refetch: fetchRoles,
   };
 }
 

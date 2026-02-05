@@ -10,17 +10,23 @@ export interface Organisation {
 }
 
 // Hook implementation
-export function useOrganisationsManagement() {
+export function useOrganisationsManagement(organisationId?: string) {
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Fetch organisations from the database on mount
   const fetchOrganisations = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from('organisations')
       .select('*')
       .order('created_at', { ascending: true });
+
+    if (organisationId) {
+      query = query.eq('id', organisationId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching organisations:', error);
@@ -29,7 +35,7 @@ export function useOrganisationsManagement() {
     }
 
     setLoading(false);
-  }, []);
+  }, [organisationId]);
 
   useEffect(() => {
     fetchOrganisations();

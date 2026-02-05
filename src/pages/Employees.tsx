@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Search,
   Plus,
@@ -6,6 +6,7 @@ import {
   Mail,
   Phone,
   Download,
+  Upload,
   UserX,
   Loader2,
 } from 'lucide-react';
@@ -101,6 +102,86 @@ function friendlySupabaseError(err: any) {
   return msg;
 }
 
+function normalizeHeader(h: string) {
+  return h.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+// Simple CSV parser that supports quoted fields and commas inside quotes.
+// Returns an array of rows, each row is an array of string cells.
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        // Escaped quote
+        cell += '"';
+        i++;
+        continue;
+      }
+      if (ch === '"') {
+        inQuotes = false;
+        continue;
+      }
+      cell += ch;
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+
+    if (ch === ',') {
+      row.push(cell);
+      cell = '';
+      continue;
+    }
+
+    if (ch === '\n') {
+      row.push(cell);
+      cell = '';
+      // Ignore completely empty trailing row
+      const isEmpty = row.every((c) => c.trim() === '');
+      if (!isEmpty) rows.push(row);
+      row = [];
+      continue;
+    }
+
+    if (ch === '\r') {
+      // ignore CR (Windows line endings)
+      continue;
+    }
+
+    cell += ch;
+  }
+
+  // Last cell/row
+  row.push(cell);
+  const isEmpty = row.every((c) => c.trim() === '');
+  if (!isEmpty) rows.push(row);
+
+  return rows;
+}
+
+function toNumberOrUndefined(v: string): number | undefined {
+  const trimmed = v.trim();
+  if (!trimmed) return undefined;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function toStringOrUndefined(v: string): string | undefined {
+  const trimmed = v.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export default function Employees() {
   const { user } = useAuth();
   const roles = useUserRole();
@@ -116,6 +197,9 @@ export default function Employees() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const {
     employees: dbEmployees,
@@ -305,7 +389,182 @@ export default function Employees() {
     }
   };
 
+  const handleImportClick = () => {
+    if (!user) {
+      toast({
+        title: 'Not signed in',
+        description: 'You must be signed in to import employees.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!canManageEmployees) {
+      toast({
+        title: 'Permission denied',
+        description: 'Only admins/managers can import employees.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!isPlatformUser && !organisationId) {
+      toast({
+        title: 'No organisation yet',
+        description: 'Create your organisation first, then import employees.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // reset input so choosing the same file again re-triggers onChange
+    e.target.value = '';
+
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast({
+        title: 'Invalid file',
+        description: 'Please upload a .csv file.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (isImporting) return;
+
+    setIsImporting(true);
+
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      if (rows.length < 2) {
+        toast({
+          title: 'Empty CSV',
+          description: 'The CSV must include a header row and at least one data row.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const headersRaw = rows[0];
+      const headers = headersRaw.map((h) => normalizeHeader(h));
+
+      // Required columns
+      const required = ['first_name', 'last_name', 'email', 'employment_type'];
+      const missing = required.filter((r) => !headers.includes(r));
+      if (missing.length > 0) {
+        toast({
+          title: 'Missing columns',
+          description: `CSV is missing: ${missing.join(', ')}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Map rows into objects
+      const dataRows = rows.slice(1);
+      const results: { ok: number; failed: number; errors: string[] } = {
+        ok: 0,
+        failed: 0,
+        errors: [],
+      };
+
+      // Basic size guard
+      if (dataRows.length > 500) {
+        toast({
+          title: 'Too many rows',
+          description: 'Please import 500 employees or fewer per file.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Inform user
+      toast({
+        title: 'Import started',
+        description: `Importing ${dataRows.length} employees...`,
+      });
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        const obj: Record<string, string> = {};
+        headers.forEach((h, idx) => {
+          obj[h] = row[idx] ?? '';
+        });
+
+        const first_name = obj['first_name']?.trim();
+        const last_name = obj['last_name']?.trim();
+        const email = obj['email']?.trim();
+        const employment_type = obj['employment_type']?.trim() as EmploymentTypeDB;
+
+        if (!first_name || !last_name || !email || !employment_type) {
+          results.failed++;
+          results.errors.push(`Row ${i + 2}: missing required fields`);
+          continue;
+        }
+
+        try {
+          await createEmployee({
+            first_name,
+            last_name,
+            email,
+            phone: toStringOrUndefined(obj['phone'] ?? ''),
+            avatar_url: toStringOrUndefined(obj['avatar_url'] ?? ''),
+            position: toStringOrUndefined(obj['position'] ?? ''),
+            department: toStringOrUndefined(obj['department'] ?? ''),
+            employment_type,
+            pay_rate: toNumberOrUndefined(obj['pay_rate'] ?? ''),
+            start_date: toStringOrUndefined(obj['start_date'] ?? '') ?? new Date().toISOString().split('T')[0],
+            // Do NOT send organisation_id (DB trigger should attach it)
+          });
+          results.ok++;
+        } catch (err: any) {
+          results.failed++;
+          results.errors.push(`Row ${i + 2}: ${friendlySupabaseError(err)}`);
+        }
+      }
+
+      const summary = `${results.ok} imported, ${results.failed} failed.`;
+      toast({
+        title: 'Import finished',
+        description: summary,
+        variant: results.failed > 0 ? 'destructive' : undefined,
+      });
+
+      if (results.failed > 0) {
+        // Print first few errors to console for debugging
+        console.group('CSV import errors');
+        results.errors.slice(0, 25).forEach((m) => console.warn(m));
+        if (results.errors.length > 25) console.warn(`...and ${results.errors.length - 25} more`);
+        console.groupEnd();
+      }
+    } catch (err: any) {
+      console.error('Import failed:', err);
+      toast({
+        title: 'Import failed',
+        description: friendlySupabaseError(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleExport = () => {
+    if (filteredEmployees.length === 0) {
+      toast({
+        title: 'Nothing to export',
+        description: 'There are no employees to export.',
+        variant: 'destructive',
+      });
+      return;
+    }
     // RLS already limits what you can see; export only exports what you can fetch.
     // Basic CSV export in-browser:
     try {
@@ -322,7 +581,7 @@ export default function Employees() {
         payRate: e.payRate,
       }));
 
-      const headers = Object.keys(rows[0] || {});
+      const headers = Object.keys(rows[0]);
       const csv = [
         headers.join(','),
         ...rows.map((r) =>
@@ -398,6 +657,24 @@ export default function Employees() {
               </Link>
             </Button>
           )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleImportFile}
+            style={{ display: 'none' }}
+          />
+
+          <Button
+            variant="outline"
+            onClick={handleImportClick}
+            disabled={!canCreateEmployee || isImporting}
+            title={!canCreateEmployee ? 'You do not have permission or an organisation yet.' : undefined}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {isImporting ? 'Importing…' : 'Import CSV'}
+          </Button>
 
           <Button variant="outline" onClick={handleExport} disabled={filteredEmployees.length === 0}>
             <Download className="h-4 w-4 mr-2" />
