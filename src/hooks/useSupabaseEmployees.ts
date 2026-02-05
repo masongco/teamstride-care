@@ -19,11 +19,15 @@ const LEGACY_STORAGE_KEY = 'hrms_employees';
  * Replaces localStorage-based useEmployees hook.
  * Includes one-time migration from localStorage.
  */
-export function useSupabaseEmployees(organisationId?: string) {
+export function useSupabaseEmployees(
+  organisationId?: string,
+  options?: { skipFallback?: boolean },
+) {
   const queryClient = useQueryClient();
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'migrating' | 'complete' | 'error'>('idle');
 
   // Get current organisation (default to first available if not specified)
+  const shouldUseFallback = !organisationId && !options?.skipFallback;
   const { data: defaultOrg } = useQuery({
     queryKey: ['default-organisation'],
     queryFn: async () => {
@@ -35,7 +39,7 @@ export function useSupabaseEmployees(organisationId?: string) {
       if (error) throw error;
       return data;
     },
-    enabled: !organisationId,
+    enabled: shouldUseFallback,
   });
 
   const orgId = organisationId || defaultOrg?.id;
@@ -92,9 +96,19 @@ export function useSupabaseEmployees(organisationId?: string) {
   // Create employee mutation
   const createMutation = useMutation({
     mutationFn: async (input: CreateEmployeeInput) => {
+      const resolvedOrgId = input.organisation_id || orgId;
+      if (!resolvedOrgId) {
+        throw new Error('No organisation ID available for employee creation.');
+      }
+
+      const payload: CreateEmployeeInput & { organisation_id: string } = {
+        ...input,
+        organisation_id: resolvedOrgId,
+      };
+
       const { data, error } = await supabase
         .from('employees')
-        .insert(input)
+        .insert(payload)
         .select()
         .single();
       

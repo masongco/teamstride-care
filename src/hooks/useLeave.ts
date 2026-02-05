@@ -4,11 +4,15 @@ import { leaveService } from '@/services/leaveService';
 import { useToast } from '@/hooks/use-toast';
 import type { LeaveApprovalPayload, LeaveAdjustmentPayload } from '@/types/leave';
 
-export function useLeave(organisationId?: string) {
+export function useLeave(
+  organisationId?: string,
+  options?: { skipFallback?: boolean },
+) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   // Get organisation ID if not provided
+  const shouldUseFallback = !organisationId && !options?.skipFallback;
   const { data: orgData } = useQuery({
     queryKey: ['organisation'],
     queryFn: async () => {
@@ -19,7 +23,7 @@ export function useLeave(organisationId?: string) {
         .single();
       return data;
     },
-    enabled: !organisationId,
+    enabled: shouldUseFallback,
   });
 
   const effectiveOrgId = organisationId || orgData?.id;

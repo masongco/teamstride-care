@@ -8,9 +8,12 @@ import { ChevronRight, Check, X, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function LeaveOverview() {
+export function LeaveOverview({ organisationId }: { organisationId?: string }) {
   const navigate = useNavigate();
-  const { leaveRequests, processDecision, isProcessingDecision, isLoading } = useLeave();
+  const { leaveRequests, processDecision, isProcessingDecision, isLoading } = useLeave(
+    organisationId,
+    { skipFallback: true },
+  );
 
   const pendingRequests = leaveRequests.filter((r) => r.status === 'pending').slice(0, 5);
 

@@ -15,13 +15,13 @@ interface ComplianceAlert {
   daysUntilExpiry: number;
 }
 
-export function ComplianceAlerts() {
+export function ComplianceAlerts({ organisationId }: { organisationId?: string }) {
   const { 
     employees, 
     certifications, 
     getCertificationsForEmployee,
     isLoading 
-  } = useSupabaseEmployees();
+  } = useSupabaseEmployees(organisationId, { skipFallback: true });
 
   // Generate alerts from Supabase data
   const alerts: ComplianceAlert[] = useMemo(() => {

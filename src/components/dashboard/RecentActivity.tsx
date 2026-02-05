@@ -1,7 +1,10 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Calendar, FileCheck, Clock, CheckCircle } from 'lucide-react';
+import { UserPlus, Calendar, FileCheck, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { formatDistanceToNow } from 'date-fns';
 
 interface ActivityItem {
   id: string;
@@ -31,62 +34,145 @@ const activityColors = {
   compliance: 'bg-success/10 text-success',
 };
 
-const mockActivity: ActivityItem[] = [
-  {
-    id: '1',
-    type: 'hire',
-    title: 'New Employee Onboarded',
-    description: 'Alex Nguyen joined as Specialist Support',
-    time: '2 hours ago',
-    user: { name: 'Alex Nguyen', initials: 'AN' },
-  },
-  {
-    id: '2',
-    type: 'leave',
-    title: 'Leave Request Approved',
-    description: 'Emma Thompson - Personal leave approved',
-    time: '3 hours ago',
-    user: { name: 'Emma Thompson', initials: 'ET' },
-  },
-  {
-    id: '3',
-    type: 'compliance',
-    title: 'Certificate Uploaded',
-    description: 'Sarah Mitchell uploaded First Aid Certificate',
-    time: '5 hours ago',
-    user: { name: 'Sarah Mitchell', initials: 'SM' },
-  },
-  {
-    id: '4',
-    type: 'timesheet',
-    title: 'Timesheet Submitted',
-    description: 'Michael Chen submitted weekly timesheet',
-    time: '6 hours ago',
-    user: { name: 'Michael Chen', initials: 'MC' },
-  },
-  {
-    id: '5',
-    type: 'document',
-    title: 'Contract Signed',
-    description: 'David Williams signed employment contract',
-    time: '1 day ago',
-    user: { name: 'David Williams', initials: 'DW' },
-  },
-];
+type AuditLogRow = {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  created_at: string;
+  user_name: string | null;
+  user_email: string | null;
+  new_values: Record<string, unknown> | null;
+};
 
-export function RecentActivity() {
+function toInitials(name: string) {
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase()).join('') || 'NA';
+}
+
+function toActivityType(action: string): ActivityItem['type'] {
+  if (action.startsWith('employee')) return 'hire';
+  if (action.startsWith('leave')) return 'leave';
+  if (action.startsWith('document')) return 'document';
+  if (action.startsWith('timesheet')) return 'timesheet';
+  if (action.startsWith('compliance')) return 'compliance';
+  return 'compliance';
+}
+
+function formatActionTitle(action: string) {
+  const cleaned = action.replace(/[._-]/g, ' ').trim();
+  return cleaned
+    .split(' ')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+export function RecentActivity({ organisationId }: { organisationId?: string }) {
+  const [logs, setLogs] = useState<AuditLogRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const fetchLogs = async () => {
+      if (!organisationId) {
+        setLogs([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select(
+          'id, action, entity_type, entity_id, created_at, user_name, user_email, new_values',
+        )
+        .eq('organisation_id', organisationId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!active) return;
+
+      if (error) {
+        console.error('[RecentActivity] Failed to fetch audit logs:', error);
+        setLogs([]);
+      } else {
+        setLogs((data || []) as AuditLogRow[]);
+      }
+      setLoading(false);
+    };
+
+    fetchLogs();
+
+    return () => {
+      active = false;
+    };
+  }, [organisationId]);
+
+  const activity = useMemo<ActivityItem[]>(() => {
+    return logs.map((log) => {
+      const userName =
+        log.user_name || log.user_email || log.entity_id || 'System';
+      const isEmployeeCreate = log.action === 'employee.create';
+      const employeeFirstName = String(
+        (log.new_values?.first_name as string | undefined) || '',
+      ).trim();
+      const employeeLastName = String(
+        (log.new_values?.last_name as string | undefined) || '',
+      ).trim();
+      const employeeName = `${employeeFirstName} ${employeeLastName}`.trim();
+      const employeeRole = String(
+        (log.new_values?.position as string | undefined) ||
+          (log.new_values?.role as string | undefined) ||
+          '',
+      ).trim();
+      const employeeDepartment = String(
+        (log.new_values?.department as string | undefined) || '',
+      ).trim();
+
+      return {
+        id: log.id,
+        type: toActivityType(log.action),
+        title: isEmployeeCreate && employeeName
+          ? `${employeeName} Joined`
+          : formatActionTitle(log.action),
+        description: isEmployeeCreate && (employeeRole || employeeDepartment)
+          ? `${employeeRole || '—'} • ${employeeDepartment || '—'}`
+          : `${log.entity_type.replace(/_/g, ' ')}${log.entity_id ? ` • ${log.entity_id}` : ''}`,
+        time: formatDistanceToNow(new Date(log.created_at), {
+          addSuffix: true,
+        }),
+        user: {
+          name: isEmployeeCreate && employeeName ? employeeName : userName,
+          initials: toInitials(
+            isEmployeeCreate && employeeName ? employeeName : userName,
+          ),
+        },
+      };
+    });
+  }, [logs]);
+
   return (
     <Card className="h-full">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
       </CardHeader>
       <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        ) : activity.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Clock className="h-10 w-10 mx-auto mb-3 opacity-50" />
+            <p className="text-sm">No recent activity yet</p>
+          </div>
+        ) : (
         <div className="relative">
           {/* Timeline line */}
           <div className="absolute left-5 top-0 bottom-0 w-px bg-border" />
 
           <div className="space-y-4">
-            {mockActivity.map((activity) => {
+            {activity.map((activity) => {
               const Icon = activityIcons[activity.type];
               return (
                 <div key={activity.id} className="relative flex gap-4 pl-2">
@@ -124,6 +210,7 @@ export function RecentActivity() {
             })}
           </div>
         </div>
+        )}
       </CardContent>
     </Card>
   );
