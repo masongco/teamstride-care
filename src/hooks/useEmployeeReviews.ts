@@ -112,7 +112,14 @@ export function useEmployeeReviewDetails(reviewId: string | undefined) {
       // Cast data to proper types
       setGoals((goalsRes.data || []) as ReviewGoal[]);
       setRatings(ratingsRes.data || []);
-      setSelfAssessment(selfRes.data as ReviewFeedback | null);
+      const normalizedSelf = selfRes.data
+        ? {
+            ...selfRes.data,
+            status: selfRes.data.status ?? 'pending',
+            is_anonymous: selfRes.data.is_anonymous ?? false,
+          }
+        : null;
+      setSelfAssessment(normalizedSelf as ReviewFeedback | null);
     } catch (error: any) {
       toast({
         title: 'Error fetching review details',
@@ -180,28 +187,32 @@ export function useSelfAssessment(reviewId: string | undefined) {
         // Create new self-assessment
         const displayName = user.user_metadata?.display_name || user.email.split('@')[0];
         
-        const { data: created, error } = await supabase
-          .from('review_feedback')
-          .insert({
-            review_id: reviewId,
-            feedback_type: 'self' as const,
-            responder_name: displayName,
-            responder_email: user.email,
-            relationship_to_employee: 'Self',
-            overall_rating: data.overall_rating,
-            strengths: data.strengths,
-            areas_for_improvement: data.areas_for_improvement,
-            additional_comments: data.additional_comments,
-            is_anonymous: false,
-            status: 'submitted',
-            submitted_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
+      const { data: created, error } = await supabase
+        .from('review_feedback')
+        .insert({
+          review_id: reviewId,
+          feedback_type: 'self' as const,
+          responder_name: displayName,
+          responder_email: user.email,
+          relationship_to_employee: 'Self',
+          overall_rating: data.overall_rating,
+          strengths: data.strengths,
+          areas_for_improvement: data.areas_for_improvement,
+          additional_comments: data.additional_comments,
+          is_anonymous: false,
+          status: 'submitted',
+          submitted_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
 
         if (error) throw error;
         toast({ title: 'Self-assessment submitted successfully' });
-        return created;
+        return {
+          ...created,
+          status: created?.status ?? 'submitted',
+          is_anonymous: created?.is_anonymous ?? false,
+        };
       }
     } catch (error: any) {
       toast({

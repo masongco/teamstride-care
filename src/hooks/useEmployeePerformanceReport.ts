@@ -77,7 +77,11 @@ export function useEmployeePerformanceReport() {
 
       const goals = goalsResult.data || [];
       const ratings = ratingsResult.data || [];
-      const feedback = feedbackResult.data || [];
+      const feedback = (feedbackResult.data || []).map((item) => ({
+        ...item,
+        status: item.status ?? 'pending',
+        is_anonymous: item.is_anonymous ?? false,
+      }));
       const competencies = competenciesResult.data || [];
 
       // Merge competency data with ratings

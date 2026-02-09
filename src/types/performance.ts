@@ -24,7 +24,7 @@ export interface SupervisionSession {
   location: string | null;
   topics_discussed: string | null;
   action_items: string | null;
-  follow_up_required: boolean;
+  follow_up_required: boolean | null;
   next_session_date: string | null;
   notes: string | null;
   created_by: string | null;
@@ -37,7 +37,7 @@ export interface Competency {
   name: string;
   description: string | null;
   category: string | null;
-  display_order: number;
+  display_order: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -72,8 +72,8 @@ export interface ReviewGoal {
   title: string;
   description: string | null;
   target_date: string | null;
-  progress_percentage: number;
-  status: 'not_started' | 'in_progress' | 'completed' | 'deferred';
+  progress_percentage: number | null;
+  status: 'not_started' | 'in_progress' | 'completed' | 'deferred' | null;
   manager_notes: string | null;
   employee_notes: string | null;
   created_at: string;
@@ -102,9 +102,9 @@ export interface ReviewFeedback {
   strengths: string | null;
   areas_for_improvement: string | null;
   additional_comments: string | null;
-  is_anonymous: boolean;
+  is_anonymous: boolean | null;
   submitted_at: string | null;
-  status: 'pending' | 'submitted';
+  status: 'pending' | 'submitted' | null;
   created_at: string;
   updated_at: string;
 }

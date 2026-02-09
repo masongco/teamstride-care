@@ -70,8 +70,8 @@ export function ReviewDetailSheet({ open, onOpenChange, review }: ReviewDetailSh
     }
   };
 
-  const pendingFeedback = feedback.filter(f => f.status === 'pending').length;
-  const submittedFeedback = feedback.filter(f => f.status === 'submitted').length;
+  const pendingFeedback = feedback.filter(f => (f.status ?? 'pending') === 'pending').length;
+  const submittedFeedback = feedback.filter(f => (f.status ?? 'pending') === 'submitted').length;
 
   return (
     <>
@@ -266,7 +266,9 @@ export function ReviewDetailSheet({ open, onOpenChange, review }: ReviewDetailSh
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {feedback.map((fb) => (
+                        {feedback.map((fb) => {
+                          const status = fb.status ?? 'pending';
+                          return (
                           <div key={fb.id} className="flex items-center justify-between p-3 rounded-lg border">
                             <div className="flex items-center gap-3">
                               <Avatar className="h-8 w-8">
@@ -281,11 +283,12 @@ export function ReviewDetailSheet({ open, onOpenChange, review }: ReviewDetailSh
                                 </p>
                               </div>
                             </div>
-                            <Badge variant={fb.status === 'submitted' ? 'default' : 'secondary'}>
-                              {fb.status === 'submitted' ? 'Received' : 'Pending'}
+                            <Badge variant={status === 'submitted' ? 'default' : 'secondary'}>
+                              {status === 'submitted' ? 'Received' : 'Pending'}
                             </Badge>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>

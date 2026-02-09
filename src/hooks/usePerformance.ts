@@ -414,7 +414,12 @@ export function useReviewFeedback(reviewId?: string) {
         .returns<ReviewFeedback[]>();
 
       if (error) throw error;
-      setFeedback(data || []);
+      const normalized = (data || []).map((item) => ({
+        ...item,
+        status: item.status ?? 'pending',
+        is_anonymous: item.is_anonymous ?? false,
+      }));
+      setFeedback(normalized);
     } catch (error: any) {
       toast({
         title: 'Error fetching feedback',
@@ -436,7 +441,14 @@ export function useReviewFeedback(reviewId?: string) {
         .single();
 
       if (error) throw error;
-      setFeedback(prev => [data, ...prev]);
+      setFeedback(prev => [
+        {
+          ...data,
+          status: data.status ?? 'pending',
+          is_anonymous: data.is_anonymous ?? false,
+        },
+        ...prev,
+      ]);
       toast({ title: 'Feedback request sent' });
 
       // Notify the responder about the feedback request
@@ -471,7 +483,13 @@ export function useReviewFeedback(reviewId?: string) {
         .single();
 
       if (error) throw error;
-      setFeedback(prev => prev.map(f => f.id === id ? data : f));
+      setFeedback(prev =>
+        prev.map(f =>
+          f.id === id
+            ? { ...data, status: data.status ?? 'pending', is_anonymous: data.is_anonymous ?? false }
+            : f
+        )
+      );
       toast({ title: 'Feedback submitted' });
       return data;
     } catch (error: any) {
