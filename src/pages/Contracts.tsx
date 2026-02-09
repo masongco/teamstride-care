@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Plus, FileText, Search, Filter } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Plus, FileText, Search, FileSignature, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -18,11 +17,15 @@ import { CreateContractDialog } from '@/components/contracts/CreateContractDialo
 import { ContractSigningDialog } from '@/components/contracts/ContractSigningDialog';
 import { ContractViewSheet } from '@/components/contracts/ContractViewSheet';
 import { useContracts } from '@/hooks/useContracts';
+import { useUserRole } from '@/hooks/useUserRole';
+import { toast } from '@/hooks/use-toast';
 import { Contract, Signature, ContractAuditLog } from '@/types/contracts';
-import { FileSignature, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function Contracts() {
   const { contracts, isLoading, createContract, signContract, getSignature, getAuditLogs, logAuditEvent } = useContracts();
+  const safeContracts = contracts ?? [];
+  const { isAdmin, isManager } = useUserRole();
+  const canManageContracts = !!(isAdmin || isManager);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -32,40 +35,100 @@ export default function Contracts() {
   const [selectedSignature, setSelectedSignature] = useState<Signature | null>(null);
   const [selectedAuditLogs, setSelectedAuditLogs] = useState<ContractAuditLog[]>([]);
 
+  // Pre-flight organisation check (prevents RLS hard failure)
+  const [hasOrg, setHasOrg] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    (async () => {
+      try {
+        const { data: userRes, error: userErr } = await supabase.auth.getUser();
+        if (userErr || !userRes.user) {
+          console.warn('Unable to resolve auth user for organisation check', userErr);
+          if (isMounted) setHasOrg(false);
+          return;
+        }
+
+        const { data: profile, error: profileErr } = (await supabase
+          .from('profiles')
+          // NOTE: `organisation_id` exists in the DB but your generated Supabase types
+          // may be stale; cast the column selection to avoid TS errors.
+          .select('organisation_id' as any)
+          .eq('user_id', userRes.user.id)
+          .maybeSingle()) as {
+          data: { organisation_id: string | null } | null;
+          error: any;
+        };
+
+        if (!isMounted) return;
+
+        if (profileErr) {
+          console.warn('Failed to load profile for organisation check', profileErr);
+          setHasOrg(false);
+          return;
+        }
+
+        setHasOrg(!!profile?.organisation_id);
+      } catch (e) {
+        console.warn('Unexpected error during organisation check', e);
+        if (isMounted) setHasOrg(false);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Calculate metrics
-  const totalContracts = contracts.length;
-  const pendingContracts = contracts.filter(c => c.status === 'pending_signature').length;
-  const signedContracts = contracts.filter(c => c.status === 'signed').length;
-  const expiredContracts = contracts.filter(c => c.status === 'expired').length;
+  const totalContracts = safeContracts.length;
+  const pendingContracts = safeContracts.filter(c => c.status === 'pending_signature').length;
+  const signedContracts = safeContracts.filter(c => c.status === 'signed').length;
+  const expiredContracts = safeContracts.filter(c => c.status === 'expired').length;
 
   // Filter contracts
-  const filteredContracts = contracts.filter(contract => {
-    const matchesSearch = 
-      contract.employee_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contract.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contract.title.toLowerCase().includes(searchQuery.toLowerCase());
-    
+  const filteredContracts = safeContracts.filter((contract) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      (contract.employee_name || '').toLowerCase().includes(q) ||
+      (contract.position || '').toLowerCase().includes(q) ||
+      (contract.title || '').toLowerCase().includes(q);
+
     const matchesStatus = statusFilter === 'all' || contract.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
   const handleViewContract = async (contract: Contract) => {
     setSelectedContract(contract);
-    
-    // Fetch signature and audit logs
-    const [signature, logs] = await Promise.all([
-      getSignature(contract.id),
-      getAuditLogs(contract.id),
-    ]);
-    
-    setSelectedSignature(signature);
-    setSelectedAuditLogs(logs);
-    
-    // Log view event
-    await logAuditEvent(contract.id, 'viewed');
-    
-    setViewSheetOpen(true);
+
+    try {
+      // Fetch signature and audit logs
+      const [signature, logs] = await Promise.all([
+        getSignature(contract.id),
+        getAuditLogs(contract.id),
+      ]);
+
+      setSelectedSignature(signature);
+      setSelectedAuditLogs(logs);
+
+      // Log view event (best-effort)
+      try {
+        await logAuditEvent(contract.id, 'viewed');
+      } catch (e) {
+        // ignore audit logging failures
+      }
+
+      setViewSheetOpen(true);
+    } catch (err: any) {
+      console.error('Failed to load contract details:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to load contract details. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleSignContract = (contract: Contract) => {
@@ -73,20 +136,56 @@ export default function Contracts() {
     setSigningDialogOpen(true);
   };
 
-  const handleSign = async (contractId: string, signatureData: string, signatureType: 'drawn' | 'typed') => {
+  const handleSign = async (
+    contractId: string,
+    signatureData: string,
+    signatureType: 'drawn' | 'typed'
+  ) => {
     if (!selectedContract) return;
-    
-    await signContract(
-      contractId,
-      signatureData,
-      signatureType,
-      selectedContract.employee_name,
-      selectedContract.employee_email
-    );
+
+    try {
+      await signContract(
+        contractId,
+        signatureData,
+        signatureType,
+        selectedContract.employee_name,
+        selectedContract.employee_email
+      );
+    } catch (err: any) {
+      console.error('Failed to sign contract:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to sign contract. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleCreate = async (contract: Parameters<typeof createContract>[0]) => {
-    await createContract(contract);
+    if (!canManageContracts) {
+      toast({
+        title: 'Not allowed',
+        description: 'You do not have permission to create contracts.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await createContract(contract);
+      toast({
+        title: 'Contract created',
+        description: 'The contract was created successfully.',
+      });
+      setCreateDialogOpen(false);
+    } catch (err: any) {
+      console.error('Failed to create contract:', err);
+      toast({
+        title: 'Create blocked',
+        description: 'Failed to create contract. This may be blocked by permissions (RLS).',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -99,10 +198,12 @@ export default function Contracts() {
             Create, send, and manage employment contracts with digital signatures
           </p>
         </div>
-        <Button className="gradient-primary" onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Contract
-        </Button>
+        {canManageContracts && (
+          <Button className="gradient-primary" onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Contract
+          </Button>
+        )}
       </div>
 
       {/* Metrics */}
@@ -169,43 +270,58 @@ export default function Contracts() {
       </Card>
 
       {/* Contracts Grid */}
-      {isLoading ? (
+      {(isLoading || hasOrg === null) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => (
+          {[1, 2, 3].map((i) => (
             <Card key={i} className="animate-pulse">
               <CardContent className="pt-6 h-48" />
             </Card>
           ))}
         </div>
-      ) : filteredContracts.length === 0 ? (
+      )}
+
+      {!isLoading && hasOrg === false && (
         <Card>
           <CardContent className="py-12 text-center">
-            <FileSignature className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="font-semibold mb-2">No contracts found</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {searchQuery || statusFilter !== 'all' 
-                ? 'Try adjusting your search or filters'
-                : 'Create your first employment contract'}
+            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="font-semibold mb-2">No organisation assigned</h3>
+            <p className="text-sm text-muted-foreground">
+              You must be assigned to an organisation before viewing contracts.
             </p>
-            {!searchQuery && statusFilter === 'all' && (
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Contract
-              </Button>
-            )}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredContracts.map(contract => (
-            <ContractCard
-              key={contract.id}
-              contract={contract}
-              onView={handleViewContract}
-              onSign={handleSignContract}
-            />
-          ))}
-        </div>
+      )}
+      {hasOrg === true && (
+        filteredContracts.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <FileSignature className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="font-semibold mb-2">No contracts found</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {searchQuery || statusFilter !== 'all' 
+                  ? 'Try adjusting your search or filters'
+                  : 'Create your first employment contract'}
+              </p>
+              {!searchQuery && statusFilter === 'all' && canManageContracts && (
+                <Button onClick={() => setCreateDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Contract
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredContracts.map(contract => (
+              <ContractCard
+                key={contract.id}
+                contract={contract}
+                onView={handleViewContract}
+                onSign={handleSignContract}
+              />
+            ))}
+          </div>
+        )
       )}
 
       {/* Dialogs */}

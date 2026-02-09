@@ -1,7 +1,14 @@
-import { useState } from 'react';
-import { 
-  Mail, Phone, FileText, Star, Calendar, Clock, 
-  ChevronRight, Send, Download, Plus, X 
+import { useMemo, useState } from 'react';
+import {
+  Mail,
+  Phone,
+  FileText,
+  Calendar,
+  ChevronRight,
+  Send,
+  Download,
+  Plus,
+  X,
 } from 'lucide-react';
 import {
   Sheet,
@@ -16,19 +23,51 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Applicant, ApplicantStage } from '@/types/recruitment';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
+export type ApplicantStage =
+  | 'applied'
+  | 'screening'
+  | 'interview'
+  | 'reference_check'
+  | 'offer'
+  | 'hired'
+  | 'rejected';
+
+export type ApplicantRow = {
+  id: string;
+  organisation_id?: string;
+  job_posting_id?: string;
+
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+
+  stage: ApplicantStage;
+  source: string | null;
+  notes: string | { id?: string; content: string; author?: string; createdAt?: string }[] | null;
+
+  created_at: string;
+  updated_at?: string;
+};
+
 interface ApplicantDetailSheetProps {
-  applicant: Applicant | null;
+  applicant: ApplicantRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onMoveStage?: (applicant: Applicant, stage: ApplicantStage) => void;
+  onMoveStage?: (applicant: ApplicantRow, stage: ApplicantStage) => void;
+  onOpenOfferLetter?: (applicant: ApplicantRow) => void;
 }
 
-const stageFlow: ApplicantStage[] = [
-  'applied', 'screening', 'interview', 'reference_check', 'offer', 'hired'
+const stageFlow: Exclude<ApplicantStage, 'rejected'>[] = [
+  'applied',
+  'screening',
+  'interview',
+  'reference_check',
+  'offer',
+  'hired',
 ];
 
 const stageLabels: Record<ApplicantStage, string> = {
@@ -51,20 +90,56 @@ const stageColors: Record<ApplicantStage, string> = {
   rejected: 'bg-destructive/10 text-destructive',
 };
 
-export function ApplicantDetailSheet({ 
-  applicant, 
-  open, 
+export function ApplicantDetailSheet({
+  applicant,
+  open,
   onOpenChange,
-  onMoveStage 
+  onMoveStage,
+  onOpenOfferLetter,
 }: ApplicantDetailSheetProps) {
-  const [note, setNote] = useState('');
+  // Placeholder note composer (until you wire a notes/events table)
+  const [noteDraft, setNoteDraft] = useState('');
+
+  const initials = useMemo(() => {
+    if (!applicant) return 'NA';
+    const a = (applicant.first_name || ' ').trim().charAt(0);
+    const b = (applicant.last_name || ' ').trim().charAt(0);
+    return `${a}${b}`.toUpperCase().trim() || 'NA';
+  }, [applicant]);
+
+  const appliedLabel = useMemo(() => {
+    if (!applicant?.created_at) return '';
+    try {
+      return format(parseISO(applicant.created_at), 'MMMM d, yyyy');
+    } catch {
+      return '';
+    }
+  }, [applicant?.created_at]);
+
+  const nextStage = useMemo(() => {
+    if (!applicant) return null;
+    if (applicant.stage === 'rejected' || applicant.stage === 'hired') return null;
+    const idx = stageFlow.indexOf(applicant.stage as any);
+    if (idx >= 0 && idx < stageFlow.length - 1) return stageFlow[idx + 1];
+    return null;
+  }, [applicant]);
+  const notesList = useMemo(() => {
+    if (!applicant) return [];
+    if (Array.isArray(applicant.notes)) return applicant.notes;
+    if (typeof applicant.notes === 'string' && applicant.notes.trim()) {
+      return [
+        {
+          id: `note-${applicant.id}`,
+          content: applicant.notes,
+          author: 'System',
+          createdAt: applicant.created_at,
+        },
+      ];
+    }
+    return [];
+  }, [applicant]);
 
   if (!applicant) return null;
-
-  const currentStageIndex = stageFlow.indexOf(applicant.stage);
-  const nextStage = currentStageIndex >= 0 && currentStageIndex < stageFlow.length - 1
-    ? stageFlow[currentStageIndex + 1]
-    : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -73,15 +148,15 @@ export function ApplicantDetailSheet({
           <div className="flex items-start gap-4">
             <Avatar className="h-14 w-14">
               <AvatarFallback className="bg-primary/10 text-primary text-lg">
-                {applicant.firstName[0]}{applicant.lastName[0]}
+                {initials}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <SheetTitle className="text-xl">
-                {applicant.firstName} {applicant.lastName}
+                {applicant.first_name} {applicant.last_name}
               </SheetTitle>
               <SheetDescription className="mt-1">
-                {applicant.jobTitle}
+                {applicant.source ? `Source: ${applicant.source}` : 'Applicant details'}
               </SheetDescription>
               <Badge className={cn('mt-2', stageColors[applicant.stage])}>
                 {stageLabels[applicant.stage]}
@@ -92,46 +167,42 @@ export function ApplicantDetailSheet({
 
         {/* Contact Info */}
         <div className="space-y-3 py-4 border-t border-b border-border">
-          <a 
-            href={`mailto:${applicant.email}`}
-            className="flex items-center gap-3 text-sm hover:text-primary transition-colors"
-          >
-            <Mail className="h-4 w-4 text-muted-foreground" />
-            {applicant.email}
-          </a>
-          <a 
-            href={`tel:${applicant.phone}`}
-            className="flex items-center gap-3 text-sm hover:text-primary transition-colors"
-          >
-            <Phone className="h-4 w-4 text-muted-foreground" />
-            {applicant.phone}
-          </a>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            Applied {format(parseISO(applicant.appliedAt), 'MMMM d, yyyy')}
-          </div>
-        </div>
+          {applicant.email ? (
+            <a
+              href={`mailto:${applicant.email}`}
+              className="flex items-center gap-3 text-sm hover:text-primary transition-colors"
+            >
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              {applicant.email}
+            </a>
+          ) : (
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <Mail className="h-4 w-4" />
+              —
+            </div>
+          )}
 
-        {/* Rating */}
-        <div className="py-4">
-          <p className="text-sm font-medium mb-2">Rating</p>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button key={star} className="p-1 hover:scale-110 transition-transform">
-                <Star
-                  className={cn(
-                    'h-5 w-5',
-                    star <= applicant.rating
-                      ? 'fill-warning text-warning'
-                      : 'text-muted hover:text-warning/50'
-                  )}
-                />
-              </button>
-            ))}
-            <span className="ml-2 text-sm text-muted-foreground">
-              {applicant.rating > 0 ? `${applicant.rating}/5` : 'Not rated'}
-            </span>
-          </div>
+          {applicant.phone ? (
+            <a
+              href={`tel:${applicant.phone}`}
+              className="flex items-center gap-3 text-sm hover:text-primary transition-colors"
+            >
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              {applicant.phone}
+            </a>
+          ) : (
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <Phone className="h-4 w-4" />
+              —
+            </div>
+          )}
+
+          {appliedLabel ? (
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              Applied {appliedLabel}
+            </div>
+          ) : null}
         </div>
 
         {/* Stage Progress */}
@@ -139,11 +210,11 @@ export function ApplicantDetailSheet({
           <p className="text-sm font-medium mb-3">Hiring Progress</p>
           <div className="flex items-center gap-1">
             {stageFlow.slice(0, -1).map((stage, index) => {
-              const isActive = stageFlow.indexOf(applicant.stage) >= index;
-              const isCurrent = applicant.stage === stage;
+              const currentIndex = stageFlow.indexOf(applicant.stage as any);
+              const isActive = currentIndex >= index;
               return (
                 <div key={stage} className="flex items-center flex-1">
-                  <div 
+                  <div
                     className={cn(
                       'h-2 flex-1 rounded-full transition-colors',
                       isActive ? 'bg-primary' : 'bg-muted'
@@ -161,27 +232,36 @@ export function ApplicantDetailSheet({
 
         {/* Actions */}
         <div className="flex gap-2 py-4">
-          {nextStage && applicant.stage !== 'rejected' && (
-            <Button 
+          {nextStage && applicant.stage !== 'rejected' ? (
+            <Button
               className="flex-1 gradient-primary"
               onClick={() => onMoveStage?.(applicant, nextStage)}
             >
               Move to {stageLabels[nextStage]}
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
-          )}
-          {applicant.stage === 'offer' && (
-            <Button className="flex-1 gradient-primary">
+          ) : null}
+
+          {applicant.stage === 'offer' ? (
+            <Button
+              className="flex-1 gradient-primary"
+              onClick={() => onOpenOfferLetter?.(applicant)}
+            >
               <Send className="h-4 w-4 mr-2" />
-              Send Offer Letter
+              Offer Letter
             </Button>
-          )}
-          {applicant.stage !== 'rejected' && applicant.stage !== 'hired' && (
-            <Button variant="outline" className="text-destructive">
+          ) : null}
+
+          {applicant.stage !== 'rejected' && applicant.stage !== 'hired' ? (
+            <Button
+              variant="outline"
+              className="text-destructive"
+              onClick={() => onMoveStage?.(applicant, 'rejected')}
+            >
               <X className="h-4 w-4 mr-1" />
               Reject
             </Button>
-          )}
+          ) : null}
         </div>
 
         <Separator />
@@ -189,39 +269,50 @@ export function ApplicantDetailSheet({
         {/* Tabs */}
         <Tabs defaultValue="notes" className="mt-4">
           <TabsList className="w-full">
-            <TabsTrigger value="notes" className="flex-1">Notes</TabsTrigger>
-            <TabsTrigger value="documents" className="flex-1">Documents</TabsTrigger>
+            <TabsTrigger value="notes" className="flex-1">
+              Notes
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="flex-1">
+              Documents
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="notes" className="mt-4 space-y-4">
-            {/* Add Note */}
+            {/* Add Note (placeholder) */}
             <div className="space-y-2">
               <Textarea
                 placeholder="Add a note about this candidate..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
                 className="min-h-[80px]"
               />
-              <Button size="sm" disabled={!note.trim()}>
+              <Button
+                size="sm"
+                disabled={!noteDraft.trim()}
+                onClick={() => {
+                  // Placeholder: keep note in the single text field for now.
+                  // When you add a recruitment_applicant_events (or notes) table,
+                  // this should INSERT and refresh.
+                  setNoteDraft('');
+                }}
+              >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Note
               </Button>
             </div>
 
-            {/* Notes List */}
+            {/* Current Notes (from applicant.notes) */}
             <div className="space-y-3">
-              {applicant.notes.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No notes yet
-                </p>
+              {notesList.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No notes yet</p>
               ) : (
-                applicant.notes.map((note) => (
-                  <div key={note.id} className="p-3 rounded-lg bg-muted/50">
-                    <p className="text-sm">{note.content}</p>
+                notesList.map((note) => (
+                  <div key={note.id ?? note.content} className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-sm whitespace-pre-wrap">{note.content}</p>
                     <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                      <span className="font-medium">{note.author}</span>
+                      <span className="font-medium">{note.author ?? 'System'}</span>
                       <span>•</span>
-                      <span>{format(parseISO(note.createdAt), 'MMM d, h:mm a')}</span>
+                      <span>{note.createdAt ? note.createdAt : 'Stored on applicant record'}</span>
                     </div>
                   </div>
                 ))
@@ -230,32 +321,27 @@ export function ApplicantDetailSheet({
           </TabsContent>
 
           <TabsContent value="documents" className="mt-4 space-y-2">
-            {applicant.documents.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No documents uploaded
-              </p>
-            ) : (
-              applicant.documents.map((doc) => (
-                <div 
-                  key={doc.id} 
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <FileText className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{doc.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Uploaded {format(parseISO(doc.uploadedAt), 'MMM d, yyyy')}
-                    </p>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Download className="h-4 w-4" />
-                  </Button>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No documents yet. (Wire this to storage + a documents table later.)
+            </p>
+
+            {/* Example placeholder row for future docs */}
+            <div className="hidden">
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <FileText className="h-4 w-4 text-primary" />
                 </div>
-              ))
-            )}
-            <Button variant="outline" className="w-full mt-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">Resume.pdf</p>
+                  <p className="text-xs text-muted-foreground">Uploaded Jan 1, 2026</p>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <Button variant="outline" className="w-full mt-2" disabled>
               <Plus className="h-4 w-4 mr-2" />
               Upload Document
             </Button>

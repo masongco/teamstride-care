@@ -1,4 +1,4 @@
-import { MapPin, Users, Clock, MoreHorizontal, Briefcase, DollarSign, Pause, Play, Edit, Trash2, Eye } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Eye, Pause, Play, Briefcase } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,14 +9,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { JobPosting, JobStatus, EmploymentType } from '@/types/recruitment';
-import { format, parseISO, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
+export type JobStatus = 'draft' | 'active' | 'paused' | 'closed';
+
+export type JobPostingCardJob = {
+  id: string;
+  title: string;
+  department: string | null;
+  status: JobStatus;
+
+  // Optional/legacy fields (safe if your UI later adds them back)
+  applicantCount?: number;
+};
+
 interface JobPostingCardProps {
-  job: JobPosting;
-  onView?: (job: JobPosting) => void;
-  onEdit?: (job: JobPosting) => void;
+  job: JobPostingCardJob;
+  onView?: (job: JobPostingCardJob) => void;
+  onEdit?: (job: JobPostingCardJob) => void;
+  onToggleStatus?: (job: JobPostingCardJob) => void;
+  onDelete?: (job: JobPostingCardJob) => void;
 }
 
 const statusConfig: Record<JobStatus, { label: string; className: string }> = {
@@ -26,18 +38,14 @@ const statusConfig: Record<JobStatus, { label: string; className: string }> = {
   closed: { label: 'Closed', className: 'bg-destructive/10 text-destructive border-destructive/20' },
 };
 
-const employmentTypeLabels: Record<EmploymentType, string> = {
-  casual: 'Casual',
-  part_time: 'Part-Time',
-  full_time: 'Full-Time',
-  contractor: 'Contractor',
-};
-
-export function JobPostingCard({ job, onView, onEdit }: JobPostingCardProps) {
+export function JobPostingCard({
+  job,
+  onView,
+  onEdit,
+  onToggleStatus,
+  onDelete,
+}: JobPostingCardProps) {
   const statusStyle = statusConfig[job.status];
-  const daysUntilClose = job.closingDate 
-    ? differenceInDays(parseISO(job.closingDate), new Date()) 
-    : null;
 
   return (
     <Card className="card-interactive">
@@ -46,11 +54,13 @@ export function JobPostingCard({ job, onView, onEdit }: JobPostingCardProps) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-semibold text-lg truncate">{job.title}</h3>
-              <Badge variant="outline" className={cn('text-xs', statusStyle.className)}>
+              <Badge variant="outline" className={cn('text-xs capitalize', statusStyle.className)}>
                 {statusStyle.label}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">{job.department}</p>
+            <p className="text-sm text-muted-foreground">
+              {job.department?.trim() ? job.department : '—'}
+            </p>
           </div>
 
           <DropdownMenu>
@@ -68,20 +78,24 @@ export function JobPostingCard({ job, onView, onEdit }: JobPostingCardProps) {
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Posting
               </DropdownMenuItem>
+
               <DropdownMenuSeparator />
+
               {job.status === 'active' ? (
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onToggleStatus?.(job)}>
                   <Pause className="h-4 w-4 mr-2" />
                   Pause Posting
                 </DropdownMenuItem>
               ) : job.status === 'paused' ? (
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onToggleStatus?.(job)}>
                   <Play className="h-4 w-4 mr-2" />
                   Resume Posting
                 </DropdownMenuItem>
               ) : null}
+
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+
+              <DropdownMenuItem className="text-destructive" onClick={() => onDelete?.(job)}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </DropdownMenuItem>
@@ -90,39 +104,19 @@ export function JobPostingCard({ job, onView, onEdit }: JobPostingCardProps) {
         </div>
 
         <div className="mt-4 space-y-2">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-4 w-4" />
-              {job.location}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Briefcase className="h-4 w-4" />
-              {employmentTypeLabels[job.employmentType]}
-            </span>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-            <span className="flex items-center gap-1.5">
-              <DollarSign className="h-4 w-4" />
-              ${job.payRateMin} - ${job.payRateMax}/hr
-            </span>
-            {job.closingDate && (
-              <span className={cn(
-                'flex items-center gap-1.5',
-                daysUntilClose !== null && daysUntilClose < 7 ? 'text-warning' : ''
-              )}>
-                <Clock className="h-4 w-4" />
-                {daysUntilClose !== null && daysUntilClose >= 0 
-                  ? `Closes in ${daysUntilClose} days`
-                  : 'Closed'}
-              </span>
-            )}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Briefcase className="h-4 w-4" />
+            <span>Recruitment job posting</span>
           </div>
         </div>
 
         <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{job.applicantCount} applicants</span>
+          <div className="text-sm text-muted-foreground">
+            {typeof job.applicantCount === 'number' ? (
+              <span className="font-medium">{job.applicantCount} applicants</span>
+            ) : (
+              <span className="font-medium">Applicants</span>
+            )}
           </div>
           <Button variant="outline" size="sm" onClick={() => onView?.(job)}>
             View Applicants

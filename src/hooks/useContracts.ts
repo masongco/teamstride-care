@@ -9,21 +9,55 @@ export function useContracts() {
 
   const fetchContracts = async () => {
     setIsLoading(true);
+
     try {
+      // Preflight: if the user has no organisation assigned yet, skip querying contracts.
+      const { data: userRes, error: userErr } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+
+      if (userErr || !uid) {
+        setContracts([]);
+        return;
+      }
+
+      // NOTE: organisation_id exists in DB but generated types may be stale in the client.
+      const { data: profile, error: profileErr } = (await supabase
+        .from('profiles')
+        .select('organisation_id' as any)
+        .eq('user_id', uid)
+        .maybeSingle()) as {
+        data: { organisation_id: string | null } | null;
+        error: any;
+      };
+
+      if (profileErr) {
+        console.warn('Contracts fetch skipped: failed to resolve profile organisation_id', profileErr);
+        setContracts([]);
+        return;
+      }
+
+      // If your SQL now allows platform admins without a profile org to still read contracts,
+      // you can remove this guard. For now, keep it to avoid hard RLS failures.
+      if (!profile?.organisation_id) {
+        setContracts([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('contracts')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase contracts SELECT error:', error);
+        setContracts([]);
+        return;
+      }
+
       setContracts((data || []) as Contract[]);
     } catch (error) {
       console.error('Error fetching contracts:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch contracts',
-        variant: 'destructive',
-      });
+      setContracts([]);
     } finally {
       setIsLoading(false);
     }
@@ -31,24 +65,31 @@ export function useContracts() {
 
   const createContract = async (contract: Omit<Contract, 'id' | 'created_at' | 'updated_at' | 'status'>) => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      
       const { data, error } = await supabase
         .from('contracts')
         .insert({
           ...contract,
           status: 'pending_signature',
-          created_by: userData.user?.id,
+          // created_by and organisation_id are set by DB trigger
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase contracts INSERT error:', error);
+        toast({
+          title: 'Create blocked',
+          description: error.message ?? 'Insert failed (RLS/constraint).',
+          variant: 'destructive',
+        });
+        throw error;
+      }
 
       // Log creation
       await logAuditEvent((data as Contract).id, 'created', 'Contract created and sent for signature');
 
       setContracts(prev => [data as Contract, ...prev]);
+      await fetchContracts();
       
       toast({
         title: 'Contract Created',
@@ -56,13 +97,18 @@ export function useContracts() {
       });
 
       return data as Contract;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating contract:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create contract',
-        variant: 'destructive',
-      });
+
+      // If we already surfaced a specific Supabase error (e.g., RLS), don't show a second generic toast.
+      if (!error?.message) {
+        toast({
+          title: 'Error',
+          description: 'Failed to create contract',
+          variant: 'destructive',
+        });
+      }
+
       throw error;
     }
   };
@@ -98,7 +144,10 @@ export function useContracts() {
         })
         .eq('id', contractId);
 
-      if (contractError) throw contractError;
+      if (contractError) {
+        console.error('Supabase contracts UPDATE error:', contractError);
+        throw contractError;
+      }
 
       // Log signing event
       await logAuditEvent(contractId, 'signed', 'Contract signed by employee', {

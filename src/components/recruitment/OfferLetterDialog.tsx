@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Send, FileSignature, Download, Eye } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Send, FileSignature, Download, Eye, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -11,19 +11,42 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Applicant } from '@/types/recruitment';
+import { supabase } from '@/integrations/supabase/client';
+
+// Avoid TypeScript "excessively deep" instantiation from generated Supabase types
+const db = supabase as any;
+
+type ApplicantStage =
+  | 'applied'
+  | 'screening'
+  | 'interview'
+  | 'reference_check'
+  | 'offer'
+  | 'hired'
+  | 'rejected';
+
+export type ApplicantRow = {
+  id: string;
+  organisation_id?: string;
+  job_posting_id?: string;
+
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+
+  stage: ApplicantStage;
+  source: string | null;
+  notes: string | null;
+
+  created_at: string;
+  updated_at?: string;
+};
 
 interface OfferLetterDialogProps {
-  applicant: Applicant | null;
+  applicant: ApplicantRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -31,20 +54,153 @@ interface OfferLetterDialogProps {
 export function OfferLetterDialog({ applicant, open, onOpenChange }: OfferLetterDialogProps) {
   const [step, setStep] = useState<'details' | 'preview'>('details');
 
+  // Minimal offer inputs (stored inside the generated content for now)
+  const [positionTitle, setPositionTitle] = useState('');
+  const [payRate, setPayRate] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [additionalNotes, setAdditionalNotes] = useState('');
+
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fullName = useMemo(() => {
+    if (!applicant) return '';
+    return `${applicant.first_name} ${applicant.last_name}`.trim();
+  }, [applicant]);
+
+  const loadOrganisationId = async (): Promise<string> => {
+    if (applicant?.organisation_id) return applicant.organisation_id;
+
+    const { data: sessionData, error: sessionErr } = await db.auth.getSession();
+    if (sessionErr) throw sessionErr;
+
+    const user = sessionData.session?.user;
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: organisationId, error: orgErr } = await db.rpc(
+      'get_user_organisation_id',
+      { _user_id: user.id },
+    );
+    if (orgErr) throw orgErr;
+    if (!organisationId) throw new Error('Missing organisation_id for user');
+
+    return organisationId;
+  };
+
+  const buildOfferContent = () => {
+    const companyName = 'Your Company';
+    const pos = positionTitle.trim() || 'the role';
+
+    const details: string[] = [];
+    if (pos) details.push(`Position: ${pos}`);
+    if (payRate.trim()) details.push(`Pay Rate: $${payRate.trim()} per hour`);
+    if (startDate) details.push(`Start Date: ${startDate}`);
+    if (expiryDate) details.push(`Offer Expiry Date: ${expiryDate}`);
+
+    const detailBlock = details.length
+      ? details.map((d) => `- ${d}`).join('\n')
+      : '- Position: (to be confirmed)';
+
+    const extra = additionalNotes.trim();
+
+    return [
+      `Dear ${fullName || 'Candidate'},`,
+      '',
+      `We are pleased to offer you the position of ${pos} at ${companyName}.`,
+      '',
+      'Offer details:',
+      detailBlock,
+      '',
+      'This offer is contingent upon completion of any required pre-employment checks.',
+      '',
+      extra ? `Additional notes:\n${extra}` : null,
+      '',
+      'Please confirm your acceptance of this offer by replying to this letter or signing and returning it by the expiry date.',
+      '',
+      'Sincerely,',
+      companyName,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  };
+
+  const saveOffer = async (status: 'draft' | 'sent') => {
+    if (!applicant) return;
+
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const orgId = await loadOrganisationId();
+      const content = buildOfferContent();
+
+      const { error: insErr } = await db.from('recruitment_offer_letters').insert({
+        organisation_id: orgId,
+        applicant_id: applicant.id,
+        status: status === 'sent' ? 'sent' : 'draft',
+        content,
+      });
+
+      if (insErr) throw insErr;
+
+      // Close on success
+      setStep('details');
+      setPositionTitle('');
+      setPayRate('');
+      setStartDate('');
+      setExpiryDate('');
+      setAdditionalNotes('');
+      onOpenChange(false);
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to save offer letter');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // If your table enum does NOT include 'sent', keep a safe fallback:
+  // We'll attempt 'sent' first; if it fails, user can still save as draft.
+  const sendOffer = async () => {
+    try {
+      await saveOffer('sent');
+    } catch {
+      // no-op (errors already set)
+    }
+  };
+
+  const previewContent = useMemo(() => buildOfferContent(), [
+    fullName,
+    positionTitle,
+    payRate,
+    startDate,
+    expiryDate,
+    additionalNotes,
+  ]);
+
   if (!applicant) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        onOpenChange(v);
+        if (!v) {
+          setError(null);
+          setStep('details');
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSignature className="h-5 w-5 text-primary" />
-            Generate Offer Letter
+            Offer Letter
           </DialogTitle>
-          <DialogDescription>
-            Create an offer letter for {applicant.firstName} {applicant.lastName}
-          </DialogDescription>
+          <DialogDescription>Create an offer letter for {fullName || 'candidate'}.</DialogDescription>
         </DialogHeader>
+
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
         {step === 'details' ? (
           <div className="space-y-6 py-4">
@@ -54,48 +210,23 @@ export function OfferLetterDialog({ applicant, open, onOpenChange }: OfferLetter
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="position">Position Title</Label>
-                  <Input id="position" defaultValue={applicant.jobTitle} />
+                  <Input
+                    id="position"
+                    value={positionTitle}
+                    onChange={(e) => setPositionTitle(e.target.value)}
+                    placeholder="e.g. Support Worker"
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="employment-type">Employment Type</Label>
-                  <Select defaultValue="casual">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="casual">Casual</SelectItem>
-                      <SelectItem value="part_time">Part-Time</SelectItem>
-                      <SelectItem value="full_time">Full-Time</SelectItem>
-                      <SelectItem value="contractor">Contractor</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Compensation */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm">Compensation</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="pay-rate">Pay Rate ($/hr)</Label>
-                  <Input id="pay-rate" type="number" placeholder="40.00" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="award">Award Classification</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select classification" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="level-1">Level 1.1</SelectItem>
-                      <SelectItem value="level-2">Level 2.1</SelectItem>
-                      <SelectItem value="level-3">Level 3.1</SelectItem>
-                      <SelectItem value="level-4">Level 4.1</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="pay-rate"
+                    type="number"
+                    inputMode="decimal"
+                    value={payRate}
+                    onChange={(e) => setPayRate(e.target.value)}
+                    placeholder="e.g. 40.00"
+                  />
                 </div>
               </div>
             </div>
@@ -108,11 +239,21 @@ export function OfferLetterDialog({ applicant, open, onOpenChange }: OfferLetter
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="start-date">Proposed Start Date</Label>
-                  <Input id="start-date" type="date" />
+                  <Input
+                    id="start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="expiry-date">Offer Expiry Date</Label>
-                  <Input id="expiry-date" type="date" />
+                  <Input
+                    id="expiry-date"
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
@@ -122,25 +263,31 @@ export function OfferLetterDialog({ applicant, open, onOpenChange }: OfferLetter
             {/* Additional Notes */}
             <div className="space-y-2">
               <Label htmlFor="notes">Additional Notes</Label>
-              <Textarea 
-                id="notes" 
+              <Textarea
+                id="notes"
                 placeholder="Any additional terms or notes to include..."
                 className="min-h-[80px]"
+                value={additionalNotes}
+                onChange={(e) => setAdditionalNotes(e.target.value)}
               />
             </div>
 
             {/* Actions */}
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
                 Cancel
               </Button>
-              <Button variant="outline" onClick={() => setStep('preview')}>
+              <Button variant="outline" onClick={() => setStep('preview')} disabled={submitting}>
                 <Eye className="h-4 w-4 mr-2" />
                 Preview
               </Button>
-              <Button className="flex-1 gradient-primary">
-                <Send className="h-4 w-4 mr-2" />
-                Send Offer Letter
+              <Button
+                className="flex-1 gradient-primary"
+                onClick={() => saveOffer('draft')}
+                disabled={submitting}
+              >
+                {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                Save Draft
               </Button>
             </div>
           </div>
@@ -153,59 +300,26 @@ export function OfferLetterDialog({ applicant, open, onOpenChange }: OfferLetter
                   <div className="w-12 h-12 rounded-lg gradient-primary flex items-center justify-center mx-auto mb-3">
                     <span className="text-white font-bold">S+</span>
                   </div>
-                  <h2 className="text-xl font-bold">Social Plus Support Work</h2>
-                  <p className="text-sm text-muted-foreground">Employment Offer Letter</p>
+                  <h2 className="text-xl font-bold">Employment Offer Letter</h2>
+                  <p className="text-sm text-muted-foreground">Draft preview</p>
                 </div>
 
-                <div className="space-y-3 text-sm">
-                  <p>Dear {applicant.firstName} {applicant.lastName},</p>
-                  
-                  <p>
-                    We are pleased to offer you the position of <strong>{applicant.jobTitle}</strong> at 
-                    Social Plus Support Work. We were impressed with your qualifications and experience, 
-                    and believe you will be a valuable addition to our team.
-                  </p>
-
-                  <div className="bg-background rounded-lg p-4 space-y-2">
-                    <p><strong>Position:</strong> {applicant.jobTitle}</p>
-                    <p><strong>Employment Type:</strong> Casual</p>
-                    <p><strong>Pay Rate:</strong> $40.00 per hour</p>
-                    <p><strong>Start Date:</strong> To be confirmed</p>
-                  </div>
-
-                  <p>
-                    This offer is contingent upon satisfactory completion of pre-employment checks, 
-                    including verification of your NDIS Worker Screening clearance and other 
-                    required certifications.
-                  </p>
-
-                  <p>
-                    Please confirm your acceptance of this offer by signing below and returning 
-                    this letter by the specified date.
-                  </p>
-
-                  <div className="pt-4 space-y-4">
-                    <div className="border-t border-border pt-4">
-                      <p className="text-muted-foreground">Signature: ________________________</p>
-                      <p className="text-muted-foreground mt-2">Date: ________________________</p>
-                    </div>
-                  </div>
-                </div>
+                <div className="space-y-3 text-sm whitespace-pre-wrap">{previewContent}</div>
               </CardContent>
             </Card>
 
             {/* Actions */}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep('details')}>
+              <Button variant="outline" onClick={() => setStep('details')} disabled={submitting}>
                 Back to Edit
               </Button>
-              <Button variant="outline">
+              <Button variant="outline" disabled>
                 <Download className="h-4 w-4 mr-2" />
                 Download PDF
               </Button>
-              <Button className="flex-1 gradient-primary">
-                <Send className="h-4 w-4 mr-2" />
-                Send to Candidate
+              <Button className="flex-1 gradient-primary" onClick={sendOffer} disabled={submitting}>
+                {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                Save as Sent
               </Button>
             </div>
           </div>

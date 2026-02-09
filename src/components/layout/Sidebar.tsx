@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import { useSidebarSettings } from '@/hooks/useSidebarSettings';
+import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
 
 interface NavItem {
   label: string;
@@ -71,9 +72,27 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { settings, loading, isModuleVisible } = useSidebarSettings();
+  const { employees } = useSupabaseEmployees();
+
+  const pendingComplianceCount = useMemo(() => {
+    if (employees.length === 0) return 0;
+    return employees.filter(
+      (employee) => employee.status !== 'inactive' && employee.compliance_status === 'pending',
+    ).length;
+  }, [employees]);
+
+  const navItems = useMemo(
+    () =>
+      allNavItems.map((item) =>
+        item.moduleKey === 'compliance'
+          ? { ...item, badge: pendingComplianceCount > 0 ? pendingComplianceCount : undefined }
+          : item,
+      ),
+    [pendingComplianceCount],
+  );
 
   // Filter nav items based on visibility settings
-  const visibleNavItems = allNavItems.filter(item => {
+  const visibleNavItems = navItems.filter(item => {
     // If settings haven't loaded yet, show all items
     if (loading || settings.length === 0) return true;
     return isModuleVisible(item.moduleKey);

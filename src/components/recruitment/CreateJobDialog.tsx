@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, X, Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -23,6 +23,16 @@ import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+// Avoid TypeScript "excessively deep" instantiation from generated Supabase types
+const db = supabase as any;
+
+type JobStatus = 'draft' | 'active' | 'paused' | 'closed';
+
+type DepartmentRow = {
+  id: string;
+  name: string;
+};
+
 interface CreateJobDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -30,19 +40,23 @@ interface CreateJobDialogProps {
 }
 
 export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialogProps) {
+  const [title, setTitle] = useState('');
+  const [department, setDepartment] = useState<string>('');
+  const [description, setDescription] = useState('');
+
   const [requirements, setRequirements] = useState<string[]>([]);
   const [newRequirement, setNewRequirement] = useState('');
+
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch departments from Supabase (same source as Settings)
   const { data: departments = [], isLoading: loadingDepartments } = useQuery({
     queryKey: ['departments'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('departments')
-        .select('*')
-        .order('name');
+    queryFn: async (): Promise<DepartmentRow[]> => {
+      const { data, error } = await db.from('departments').select('id, name').order('name');
       if (error) throw error;
-      return data;
+      return (data ?? []) as any;
     },
   });
 
@@ -57,27 +71,116 @@ export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialog
     setRequirements(requirements.filter((_, i) => i !== index));
   };
 
+  const reset = () => {
+    setTitle('');
+    setDepartment('');
+    setDescription('');
+    setRequirements([]);
+    setNewRequirement('');
+    setError(null);
+  };
+
+  const canSubmit = useMemo(() => {
+    return title.trim().length > 0 && department.trim().length > 0 && !submitting;
+  }, [title, department, submitting]);
+
+  const loadOrganisationId = async (): Promise<string> => {
+    const { data: sessionData, error: sessionErr } = await db.auth.getSession();
+    if (sessionErr) throw sessionErr;
+
+    const user = sessionData.session?.user;
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: organisationId, error: orgErr } = await db.rpc(
+      'get_user_organisation_id',
+      { _user_id: user.id },
+    );
+    if (orgErr) throw orgErr;
+    if (!organisationId) throw new Error('Missing organisation_id for user');
+
+    return organisationId;
+  };
+
+  const buildFullDescription = () => {
+    const base = description.trim();
+    if (requirements.length === 0) return base;
+
+    const reqBlock = requirements.map((r) => `- ${r}`).join('\n');
+
+    // If no description yet, just return requirements block.
+    if (!base) return `Requirements:\n${reqBlock}`;
+
+    // Append requirements.
+    return `${base}\n\nRequirements:\n${reqBlock}`;
+  };
+
+  const createJob = async (status: JobStatus) => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const orgId = await loadOrganisationId();
+
+      const payload = {
+        organisation_id: orgId,
+        title: title.trim(),
+        department: department.trim() || null,
+        status,
+        // NOTE: If your table has a `description` column, keep this.
+        // If it doesn't, remove this line.
+        description: buildFullDescription() || null,
+      };
+
+      const { error: insErr } = await db.from('recruitment_job_postings').insert(payload);
+      if (insErr) throw insErr;
+
+      reset();
+      onOpenChange?.(false);
+    } catch (e: any) {
+      // Common case: table doesn't have `description` column.
+      if (String(e?.message ?? '').toLowerCase().includes('column') && String(e?.message ?? '').toLowerCase().includes('description')) {
+        setError(
+          "Your `recruitment_job_postings` table doesn't have a `description` column. Either add it, or tell me what column should store the description."
+        );
+      } else {
+        setError(e?.message ?? 'Failed to create job posting');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        onOpenChange?.(v);
+        if (!v) reset();
+      }}
+    >
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Job Posting</DialogTitle>
-          <DialogDescription>
-            Fill in the details to create a new job listing.
-          </DialogDescription>
+          <DialogDescription>Fill in the details to create a new job listing.</DialogDescription>
         </DialogHeader>
+
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
         <div className="space-y-6 py-4">
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="job-title">Job Title *</Label>
-              <Input id="job-title" placeholder="e.g. Support Worker" />
+              <Input
+                id="job-title"
+                placeholder="e.g. Support Worker"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="department">Department *</Label>
-              <Select>
+              <Select value={department} onValueChange={setDepartment}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
@@ -87,9 +190,7 @@ export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialog
                       <Loader2 className="h-4 w-4 animate-spin" />
                     </div>
                   ) : departments.length === 0 ? (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                      No departments configured
-                    </div>
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">No departments configured</div>
                   ) : (
                     departments.map((dept) => (
                       <SelectItem key={dept.id} value={dept.name}>
@@ -102,52 +203,15 @@ export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialog
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="location">Location *</Label>
-              <Input id="location" placeholder="e.g. Melbourne, VIC" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="employment-type">Employment Type *</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  <SelectItem value="casual">Casual</SelectItem>
-                  <SelectItem value="part_time">Part-Time</SelectItem>
-                  <SelectItem value="full_time">Full-Time</SelectItem>
-                  <SelectItem value="contractor">Contractor</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Pay Rate */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="pay-min">Minimum Pay Rate ($/hr)</Label>
-              <Input id="pay-min" type="number" placeholder="35" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pay-max">Maximum Pay Rate ($/hr)</Label>
-              <Input id="pay-max" type="number" placeholder="45" />
-            </div>
-          </div>
-
-          {/* Closing Date */}
-          <div className="space-y-2">
-            <Label htmlFor="closing-date">Closing Date</Label>
-            <Input id="closing-date" type="date" />
-          </div>
-
           {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Job Description *</Label>
-            <Textarea 
-              id="description" 
+            <Label htmlFor="description">Job Description</Label>
+            <Textarea
+              id="description"
               placeholder="Describe the role, responsibilities, and what you're looking for..."
               className="min-h-[120px]"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
@@ -159,9 +223,14 @@ export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialog
                 placeholder="Add a requirement..."
                 value={newRequirement}
                 onChange={(e) => setNewRequirement(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRequirement())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addRequirement();
+                  }
+                }}
               />
-              <Button type="button" onClick={addRequirement} variant="outline">
+              <Button type="button" onClick={addRequirement} variant="outline" disabled={submitting}>
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -174,6 +243,7 @@ export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialog
                       type="button"
                       onClick={() => removeRequirement(index)}
                       className="ml-2 hover:text-destructive"
+                      disabled={submitting}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -185,10 +255,17 @@ export function CreateJobDialog({ open, onOpenChange, trigger }: CreateJobDialog
 
           {/* Actions */}
           <div className="flex gap-3 pt-4 border-t border-border">
-            <Button variant="outline" className="flex-1" onClick={() => onOpenChange?.(false)}>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => createJob('draft')}
+              disabled={!canSubmit}
+            >
+              {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Save as Draft
             </Button>
-            <Button className="flex-1 gradient-primary">
+            <Button className="flex-1 gradient-primary" onClick={() => createJob('active')} disabled={!canSubmit}>
+              {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Publish Job
             </Button>
           </div>
