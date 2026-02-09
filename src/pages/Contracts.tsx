@@ -20,6 +20,7 @@ import { useContracts } from '@/hooks/useContracts';
 import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from '@/hooks/use-toast';
 import { Contract, Signature, ContractAuditLog } from '@/types/contracts';
+import { accessDeniedMessage, isAccessDeniedError } from '@/lib/errorMessages';
 
 export default function Contracts() {
   const { contracts, isLoading, createContract, signContract, getSignature, getAuditLogs, logAuditEvent } = useContracts();
@@ -164,8 +165,8 @@ export default function Contracts() {
   const handleCreate = async (contract: Parameters<typeof createContract>[0]) => {
     if (!canManageContracts) {
       toast({
-        title: 'Not allowed',
-        description: 'You do not have permission to create contracts.',
+        title: 'Access restricted',
+        description: accessDeniedMessage('contracts'),
         variant: 'destructive',
       });
       return;
@@ -182,7 +183,9 @@ export default function Contracts() {
       console.error('Failed to create contract:', err);
       toast({
         title: 'Create blocked',
-        description: 'Failed to create contract. This may be blocked by permissions (RLS).',
+        description: isAccessDeniedError(err)
+          ? accessDeniedMessage('contracts')
+          : 'Failed to create contract. Please try again.',
         variant: 'destructive',
       });
     }

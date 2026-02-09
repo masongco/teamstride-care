@@ -26,6 +26,7 @@ import { EmploymentType } from '@/types/hrms';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { useUserRole } from '@/hooks/useUserRole';
+import { accessDeniedMessage } from '@/lib/errorMessages';
 import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
 import type { EmployeeDB } from '@/types/database';
 
@@ -72,9 +73,9 @@ export default function DeactivatedStaff() {
         <Card>
           <CardContent className="py-12 text-center">
             <ShieldAlert className="h-12 w-12 mx-auto text-destructive mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+            <h2 className="text-xl font-semibold mb-2">Access Restricted</h2>
             <p className="text-muted-foreground mb-4">
-              Only administrators and managers can view the deactivated staff archive.
+              {accessDeniedMessage('the deactivated staff archive')}
             </p>
             <Button variant="outline" asChild>
               <Link to="/employees">

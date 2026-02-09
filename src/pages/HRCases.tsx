@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { useHRCases } from '@/hooks/useHRCases';
 import { useUserRole } from '@/hooks/useUserRole';
+import { accessDeniedMessage } from '@/lib/errorMessages';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -85,7 +86,7 @@ export default function HRCases() {
             <Lock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-lg font-semibold mb-2">Access Restricted</h2>
             <p className="text-muted-foreground">
-              This module is only accessible to administrators and managers.
+              {accessDeniedMessage('HR Cases')}
             </p>
           </CardContent>
         </Card>

@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog';
 import { EmployeeDetailSheet } from '@/components/employees/EmployeeDetailSheet';
 import { toast } from '@/hooks/use-toast';
+import { accessDeniedMessage, friendlyErrorMessage, isAccessDeniedError } from '@/lib/errorMessages';
 import { Link } from 'react-router-dom';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
@@ -90,16 +91,10 @@ function dbToLegacyEmployee(emp: EmployeeDB): Employee {
 }
 
 function friendlySupabaseError(err: any) {
-  const msg =
-    err?.message ||
-    err?.error_description ||
-    err?.details ||
-    'You may not have permission to do that.';
-  // Typical RLS error strings contain "permission denied" or "violates row-level security"
-  if (typeof msg === 'string' && msg.toLowerCase().includes('row-level security')) {
-    return 'Permission blocked by security policy. Check your role and organisation.';
+  if (isAccessDeniedError(err)) {
+    return accessDeniedMessage('this action');
   }
-  return msg;
+  return friendlyErrorMessage(err, 'You may not have permission to do that.');
 }
 
 function normalizeHeader(h: string) {
@@ -341,8 +336,8 @@ export default function Employees() {
 
     if (!canManageEmployees) {
       toast({
-        title: 'Permission denied',
-        description: 'Only admins/managers can add employees.',
+        title: 'Access restricted',
+        description: accessDeniedMessage('adding employees'),
         variant: 'destructive',
       });
       return;
@@ -401,8 +396,8 @@ export default function Employees() {
 
     if (!canManageEmployees) {
       toast({
-        title: 'Permission denied',
-        description: 'Only admins/managers can import employees.',
+        title: 'Access restricted',
+        description: accessDeniedMessage('importing employees'),
         variant: 'destructive',
       });
       return;
@@ -670,7 +665,7 @@ export default function Employees() {
             variant="outline"
             onClick={handleImportClick}
             disabled={!canCreateEmployee || isImporting}
-            title={!canCreateEmployee ? 'You do not have permission or an organisation yet.' : undefined}
+            title={!canCreateEmployee ? accessDeniedMessage('creating employees') : undefined}
           >
             <Upload className="h-4 w-4 mr-2" />
             {isImporting ? 'Importing…' : 'Import CSV'}
@@ -685,7 +680,7 @@ export default function Employees() {
             className="gradient-primary"
             onClick={() => setAddDialogOpen(true)}
             disabled={!canCreateEmployee || isCreating}
-            title={!canCreateEmployee ? 'You do not have permission or an organisation yet.' : undefined}
+            title={!canCreateEmployee ? accessDeniedMessage('creating employees') : undefined}
           >
             <Plus className="h-4 w-4 mr-2" />
             Add Employee
@@ -814,8 +809,8 @@ export default function Employees() {
                         onClick={(e) => {
                           e.stopPropagation();
                           toast({
-                            title: 'Permission denied',
-                            description: 'You do not have permission to modify employees.',
+                            title: 'Access restricted',
+                            description: accessDeniedMessage('employee records'),
                             variant: 'destructive',
                           });
                         }}

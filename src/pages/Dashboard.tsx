@@ -13,6 +13,7 @@ import { useLeave } from '@/hooks/useLeave';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { accessDeniedMessage } from '@/lib/errorMessages';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -170,7 +171,7 @@ export default function Dashboard() {
                 </Button>
               ) : isEmployee ? (
                 <span className="text-xs text-muted-foreground">
-                  Contact your administrator for access.
+                  {accessDeniedMessage('this dashboard')}
                 </span>
               ) : null}
             </div>

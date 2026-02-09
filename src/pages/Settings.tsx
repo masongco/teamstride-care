@@ -79,6 +79,7 @@ import {
   Building,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { accessDeniedMessage } from '@/lib/errorMessages';
 import { SidebarSettingsTab } from '@/components/settings/SidebarSettingsTab';
 import { CreateUserDialog } from '@/components/settings/CreateUserDialog';
 import {
@@ -435,8 +436,7 @@ export default function Settings() {
     } else {
       toast({
         title: 'Error',
-        description:
-          'Failed to update user role. You may not have admin permissions.',
+        description: accessDeniedMessage('user role management'),
         variant: 'destructive',
       });
     }
@@ -461,8 +461,7 @@ export default function Settings() {
     } else {
       toast({
         title: 'Error',
-        description:
-          'Failed to delete user. You may not have admin permissions.',
+        description: accessDeniedMessage('user management'),
         variant: 'destructive',
       });
     }
@@ -567,10 +566,7 @@ export default function Settings() {
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
             <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>You don’t have access to organisation settings.</p>
-            <p className="text-sm">
-              If you need changes, contact your admin.
-            </p>
+            <p>{accessDeniedMessage('organisation settings')}</p>
           </CardContent>
         </Card>
       </div>
