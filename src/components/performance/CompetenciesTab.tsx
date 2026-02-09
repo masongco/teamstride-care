@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -45,12 +44,23 @@ import { Plus, MoreHorizontal, Target, Loader2, Pencil, Trash2 } from 'lucide-re
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useCompetencies } from '@/hooks/usePerformance';
-import type { Competency } from '@/types/performance';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CompetenciesTabProps {
   searchQuery: string;
 }
+
+type CompetencyRow = {
+  id: string;
+  organisation_id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  display_order: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 const competencySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -64,10 +74,50 @@ type CompetencyFormValues = z.infer<typeof competencySchema>;
 const categories = ['Core Skills', 'Compliance', 'Professional', 'Growth', 'Leadership'];
 
 export function CompetenciesTab({ searchQuery }: CompetenciesTabProps) {
-  const { competencies, loading, createCompetency, updateCompetency, deleteCompetency } = useCompetencies();
+  // Avoid deep type instantiation from generated Supabase types
+  const db = supabase as any;
+  const [competencies, setCompetencies] = useState<CompetencyRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingCompetency, setEditingCompetency] = useState<Competency | null>(null);
+  const [editingCompetency, setEditingCompetency] = useState<CompetencyRow | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getOrganisationId = useCallback(async (): Promise<string> => {
+    const { data: userRes, error: userErr } = await db.auth.getUser();
+    if (userErr) throw userErr;
+    const user = userRes.user;
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: organisationId, error: orgErr } = await db.rpc(
+      'get_user_organisation_id',
+      { _user_id: user.id },
+    );
+    if (orgErr) throw orgErr;
+    if (!organisationId) throw new Error('Missing organisation_id for user');
+    return organisationId as string;
+  }, []);
+
+  const fetchCompetencies = useCallback(async () => {
+    try {
+      setLoading(true);
+      const organisationId = await getOrganisationId();
+      const { data, error } = await db
+        .from('competencies')
+        .select('*')
+        .eq('is_active', true)
+        .eq('organisation_id', organisationId)
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+      setCompetencies((data || []) as CompetencyRow[]);
+    } finally {
+      setLoading(false);
+    }
+  }, [getOrganisationId]);
+
+  useEffect(() => {
+    void fetchCompetencies();
+  }, [fetchCompetencies]);
 
   const form = useForm<CompetencyFormValues>({
     resolver: zodResolver(competencySchema),
@@ -79,18 +129,18 @@ export function CompetenciesTab({ searchQuery }: CompetenciesTabProps) {
     },
   });
 
-  const filteredCompetencies = competencies.filter(c => 
+  const filteredCompetencies = competencies.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (c.category?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
-  const handleEdit = (competency: Competency) => {
+  const handleEdit = (competency: CompetencyRow) => {
     setEditingCompetency(competency);
     form.reset({
       name: competency.name,
       description: competency.description || '',
       category: competency.category || 'Core Skills',
-      display_order: competency.display_order,
+      display_order: competency.display_order ?? 0,
     });
     setDialogOpen(true);
   };
@@ -109,21 +159,38 @@ export function CompetenciesTab({ searchQuery }: CompetenciesTabProps) {
   const onSubmit = async (values: CompetencyFormValues) => {
     setIsSubmitting(true);
     try {
+      const organisationId = await getOrganisationId();
       if (editingCompetency) {
-        await updateCompetency(editingCompetency.id, {
-          name: values.name,
-          description: values.description || null,
-          category: values.category,
-          display_order: values.display_order,
-        });
+        const { data, error } = await db
+          .from('competencies')
+          .update({
+            name: values.name,
+            description: values.description || null,
+            category: values.category,
+            display_order: values.display_order,
+          })
+          .eq('id', editingCompetency.id)
+          .select()
+          .single();
+        if (error) throw error;
+        setCompetencies(prev =>
+          prev.map(comp => (comp.id === editingCompetency.id ? (data as CompetencyRow) : comp))
+        );
       } else {
-        await createCompetency({
-          name: values.name,
-          description: values.description || null,
-          category: values.category,
-          display_order: values.display_order,
-          is_active: true,
-        });
+        const { data, error } = await db
+          .from('competencies')
+          .insert({
+            organisation_id: organisationId,
+            name: values.name,
+            description: values.description || null,
+            category: values.category,
+            display_order: values.display_order,
+            is_active: true,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        setCompetencies(prev => [...prev, data as CompetencyRow].sort((a, b) => (a.display_order || 0) - (b.display_order || 0)));
       }
       setDialogOpen(false);
       form.reset();
@@ -137,7 +204,18 @@ export function CompetenciesTab({ searchQuery }: CompetenciesTabProps) {
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(comp);
     return acc;
-  }, {} as Record<string, Competency[]>);
+  }, {} as Record<string, CompetencyRow[]>);
+
+  const handleDelete = async (id: string) => {
+    const { error } = await db
+      .from('competencies')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (!error) {
+      setCompetencies(prev => prev.filter(comp => comp.id !== id));
+    }
+  };
 
   if (loading) {
     return (
@@ -205,8 +283,8 @@ export function CompetenciesTab({ searchQuery }: CompetenciesTabProps) {
                                   <Pencil className="h-4 w-4 mr-2" />
                                   Edit
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => deleteCompetency(comp.id)}
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(comp.id)}
                                   className="text-destructive"
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" />

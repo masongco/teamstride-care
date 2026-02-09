@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -32,8 +32,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { useSupervisions } from '@/hooks/usePerformance';
-import { useEmployees } from '@/hooks/useEmployees';
+import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
+import type { EmployeeDB } from '@/types/database';
 
 const supervisionSchema = z.object({
   employee_id: z.string().min(1, 'Please select an employee'),
@@ -52,7 +54,41 @@ interface CreateSupervisionDialogProps {
 export function CreateSupervisionDialog({ open, onOpenChange }: CreateSupervisionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { createSupervision } = useSupervisions();
-  const { activeEmployees } = useEmployees();
+  const [orgId, setOrgId] = useState<string | undefined>(undefined);
+  const db = supabase as any;
+
+  const getOrganisationId = useCallback(async (): Promise<string | undefined> => {
+    const { data: userRes, error: userErr } = await db.auth.getUser();
+    if (userErr) throw userErr;
+    const user = userRes.user;
+    if (!user) return undefined;
+
+    const { data: organisationId, error: orgErr } = await db.rpc(
+      'get_user_organisation_id',
+      { _user_id: user.id },
+    );
+    if (orgErr) throw orgErr;
+    return organisationId as string | undefined;
+  }, [db]);
+
+  useEffect(() => {
+    void (async () => {
+      const resolved = await getOrganisationId();
+      setOrgId(resolved);
+    })();
+  }, [getOrganisationId]);
+
+  const { activeEmployees: dbActiveEmployees } = useSupabaseEmployees(orgId, { skipFallback: true });
+  const activeEmployees = useMemo(
+    () => dbActiveEmployees.map((emp: EmployeeDB) => ({
+      id: emp.id,
+      firstName: emp.first_name,
+      lastName: emp.last_name,
+      email: emp.email,
+      position: emp.position || '',
+    })),
+    [dbActiveEmployees],
+  );
 
   const form = useForm<SupervisionFormValues>({
     resolver: zodResolver(supervisionSchema),
