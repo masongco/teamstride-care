@@ -11,22 +11,27 @@ import type { AuditPackType, CreateAuditPackInput, AuditPack } from '@/types/aud
 export function useAuditPacks(organisationId?: string) {
   const queryClient = useQueryClient();
 
-  // Get default organisation if not provided
-  const { data: defaultOrg } = useQuery({
-    queryKey: ['default-organisation'],
+  // Resolve organisation via current user context (preferred over default org)
+  const { data: resolvedOrgId } = useQuery({
+    queryKey: ['current-org-id'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('organisations')
-        .select('id')
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      if (organisationId) return organisationId;
+      const { data: userRes, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      const user = userRes.user;
+      if (!user) return null;
+
+      const { data: orgId, error: orgErr } = await supabase.rpc(
+        'get_user_organisation_id',
+        { _user_id: user.id },
+      );
+      if (orgErr) throw orgErr;
+      return orgId as string | null;
     },
     enabled: !organisationId,
   });
 
-  const orgId = organisationId || defaultOrg?.id;
+  const orgId = organisationId || resolvedOrgId;
 
   // Fetch all audit packs
   const {
