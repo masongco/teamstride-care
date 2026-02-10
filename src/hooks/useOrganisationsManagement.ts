@@ -64,25 +64,52 @@ export function useOrganisationsManagement(organisationId?: string) {
     await logAuthContext('addOrganisation');
     console.log('[orgs][addOrganisation] payload', org);
 
-    const { data, error } = await supabase
-      .from('organisations')
-      .insert(org)
-      .select('*')
-      .single();
-
-    if (error) {
-      console.error('Error adding organisation (verbose):', {
-        code: (error as any)?.code,
-        message: (error as any)?.message,
-        details: (error as any)?.details,
-        hint: (error as any)?.hint,
-      });
-      console.error('Error adding organisation:', error);
-      return { success: false, error };
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error('[orgs][addOrganisation] getSession error', sessionError);
+      return { success: false, error: sessionError };
+    }
+    if (!session) {
+      const err = new Error('No active session');
+      console.error('[orgs][addOrganisation] no session');
+      return { success: false, error: err };
     }
 
-    setOrganisations((prev) => [...prev, data]);
-    return { success: true, data };
+    const newOrgId = (globalThis.crypto && 'randomUUID' in globalThis.crypto)
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { error: insertError } = await supabase
+      .from('organisations')
+      .insert({ id: newOrgId, ...org });
+
+    if (insertError) {
+      console.error('Error adding organisation (verbose):', {
+        code: (insertError as any)?.code,
+        message: (insertError as any)?.message,
+        details: (insertError as any)?.details,
+        hint: (insertError as any)?.hint,
+      });
+      console.error('Error adding organisation:', insertError);
+      return { success: false, error: insertError };
+    }
+
+    // Attach the created org to the creator's profile so org-scoped SELECT policies will work.
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ organisation_id: newOrgId })
+      .eq('user_id', session.user.id)
+      .is('organisation_id', null);
+
+    if (profileError) {
+      console.error('[orgs][addOrganisation] failed to attach organisation_id to profile', profileError);
+      // Still refetch to reflect the insert if possible, but surface the error.
+      await fetchOrganisations();
+      return { success: false, error: profileError };
+    }
+
+    await fetchOrganisations();
+    return { success: true, data: { id: newOrgId, ...org } as Organisation };
   };
 
   // Update an existing organisation by id
