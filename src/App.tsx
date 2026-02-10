@@ -56,7 +56,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter basename="/teamstride-care">
+      <BrowserRouter basename={import.meta.env.MODE === "ghpages" ? "/teamstride-care" : "/"}>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
