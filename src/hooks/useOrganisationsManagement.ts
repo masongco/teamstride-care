@@ -14,6 +14,24 @@ export function useOrganisationsManagement(organisationId?: string) {
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const logAuthContext = async (label: string) => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) {
+        console.warn(`[orgs][${label}] getSession error`, error);
+        return;
+      }
+      console.log(`[orgs][${label}] session`, {
+        hasSession: !!session,
+        uid: session?.user?.id,
+        email: session?.user?.email,
+        role: session?.user?.role,
+      });
+    } catch (e) {
+      console.warn(`[orgs][${label}] getSession threw`, e);
+    }
+  };
+
   // Fetch organisations from the database on mount
   const fetchOrganisations = useCallback(async () => {
     setLoading(true);
@@ -43,13 +61,22 @@ export function useOrganisationsManagement(organisationId?: string) {
 
   // Add a new organisation
   const addOrganisation = async (org: Omit<Organisation, 'id'>) => {
+    await logAuthContext('addOrganisation');
+    console.log('[orgs][addOrganisation] payload', org);
+
     const { data, error } = await supabase
       .from('organisations')
-      .insert([org])
-      .select()
+      .insert(org)
+      .select('*')
       .single();
 
     if (error) {
+      console.error('Error adding organisation (verbose):', {
+        code: (error as any)?.code,
+        message: (error as any)?.message,
+        details: (error as any)?.details,
+        hint: (error as any)?.hint,
+      });
       console.error('Error adding organisation:', error);
       return { success: false, error };
     }
