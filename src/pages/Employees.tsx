@@ -91,6 +91,15 @@ function dbCertToDocument(cert: EmployeeCertificationDB): Document | null {
   };
 }
 
+function deriveComplianceStatus(certs: EmployeeCertificationDB[]): ComplianceStatus {
+  if (certs.length === 0) return 'pending';
+  const statuses = certs.map((c) => c.status as ComplianceStatus);
+  if (statuses.includes('expired')) return 'expired';
+  if (statuses.includes('expiring')) return 'expiring';
+  if (statuses.includes('pending')) return 'pending';
+  return 'compliant';
+}
+
 type EmployeeDocumentRow = {
   id: string;
   user_id: string;
@@ -132,7 +141,7 @@ function dbToLegacyEmployee(
     department: emp.department || '',
     startDate: emp.start_date || '',
     status: emp.status as Employee['status'],
-    complianceStatus: emp.compliance_status as ComplianceStatus,
+    complianceStatus: deriveComplianceStatus(certs),
     payRate: emp.pay_rate || 0,
     awardClassification: emp.award_classification_id || undefined,
     emergencyContact: emp.emergency_contact_name
@@ -281,7 +290,7 @@ export default function Employees() {
 
   const [employeeDocsMap, setEmployeeDocsMap] = useState<Record<string, Document[]>>({});
 
-  const fetchEmployeeDocuments = async (employeeIds: string[]) => {
+  const fetchEmployeeDocuments = async (employeeIds: string[], replaceAll = false) => {
     if (employeeIds.length === 0) {
       setEmployeeDocsMap({});
       return;
@@ -303,12 +312,12 @@ export default function Employees() {
       map[row.user_id].push(dbEmployeeDocToDocument(row));
     });
 
-    setEmployeeDocsMap(map);
+    setEmployeeDocsMap((prev) => (replaceAll ? map : { ...prev, ...map }));
   };
 
   useEffect(() => {
     const ids = dbEmployees.map((e) => e.id);
-    fetchEmployeeDocuments(ids);
+    fetchEmployeeDocuments(ids, true);
   }, [dbEmployees]);
 
   // Convert DB employees to legacy format for UI compatibility
@@ -367,6 +376,7 @@ export default function Employees() {
   );
 
   const handleViewProfile = (employee: Employee) => {
+    fetchEmployeeDocuments([employee.id]);
     setSelectedEmployee(employee);
     setDetailSheetOpen(true);
   };
@@ -502,7 +512,12 @@ export default function Employees() {
         status: 'pending',
       });
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      const message = insertError.message?.includes('row-level security')
+        ? 'Upload blocked by permissions. An admin policy is required to upload for other employees.'
+        : insertError.message;
+      throw new Error(message);
+    }
 
     await fetchEmployeeDocuments([employee.id]);
   };

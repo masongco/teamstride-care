@@ -343,6 +343,7 @@ export function EmployeeDetailSheet({
 
   const awardLabel =
     awardClassifications.find((award) => award.id === employee.awardClassification)?.name || 'Not set';
+  const certifications = employee.certifications ?? [];
 
   const handleStartEdit = () => {
     setEditData(buildEditData(employee));
@@ -812,9 +813,9 @@ export function EmployeeDetailSheet({
                       </Button>
                     </div>
                     
-                    {employee.certifications.length > 0 ? (
-                      <div className="space-y-2">
-                        {employee.certifications.map((cert) => {
+                  {certifications.length > 0 ? (
+                    <div className="space-y-2">
+                      {certifications.map((cert) => {
                           const { daysUntil, expiry } = getExpiryInfo(cert.expiryDate);
                           return (
                             <div 
@@ -865,7 +866,7 @@ export function EmployeeDetailSheet({
                     ) : (
                       <div className="text-center py-4 border-2 border-dashed border-muted rounded-lg">
                         <Shield className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                        <p className="text-sm text-muted-foreground mb-2">No certifications added</p>
+                        <p className="text-sm text-muted-foreground mb-2">No Certifications added</p>
                         <Button 
                           variant="outline" 
                           size="sm" 

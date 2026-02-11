@@ -49,7 +49,7 @@ interface CertificationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   certification?: Certification | null;
-  onSave: (certification: Certification, documentFile?: File) => void;
+  onSave: (certification: Certification, documentFile?: File) => void | Promise<void>;
   onDelete?: (certificationId: string) => void;
 }
 
@@ -231,7 +231,7 @@ export function CertificationDialog({
     setDocumentFile(file);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validate form
     const result = certificationSchema.safeParse(formData);
     
@@ -264,9 +264,20 @@ export function CertificationDialog({
       documentId: certification?.documentId,
     };
 
-    onSave(newCertification, documentFile || undefined);
-    setIsSubmitting(false);
-    onOpenChange(false);
+    try {
+      await onSave(newCertification, documentFile || undefined);
+      setIsSubmitting(false);
+      onOpenChange(false);
+    } catch (err: any) {
+      console.error('Failed to save certification:', err);
+      toast({
+        title: 'Save failed',
+        description: err?.message || 'Unable to save certification.',
+        variant: 'destructive',
+      });
+      setIsSubmitting(false);
+      return;
+    }
     
     // Reset form
     setFormData({
