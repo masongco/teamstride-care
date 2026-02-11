@@ -9,6 +9,8 @@ import {
   Upload,
   UserX,
   Loader2,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { EmploymentType, ComplianceStatus } from '@/types/hrms';
 import { cn } from '@/lib/utils';
 import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog';
@@ -189,6 +192,8 @@ export default function Employees() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [sortOrder, setSortOrder] = useState<'az' | 'za'>('az');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -218,16 +223,19 @@ export default function Employees() {
   const employees = useMemo(() => dbEmployees.map(dbToLegacyEmployee), [dbEmployees]);
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter((employee) => {
+    const filtered = employees.filter((employee) => {
       // Exclude inactive/deactivated employees from the main list
       if (employee.status === 'inactive') return false;
 
+      const normalizedQuery = searchQuery.trim().toLowerCase();
+      const tokens = normalizedQuery ? normalizedQuery.split(/\s+/) : [];
+      const name = `${employee.firstName} ${employee.lastName}`.toLowerCase();
+      const email = (employee.email || '').toLowerCase();
+      const position = (employee.position || '').toLowerCase();
+      const haystack = `${name} ${email} ${position}`;
+
       const matchesSearch =
-        `${employee.firstName} ${employee.lastName}`
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        employee.position.toLowerCase().includes(searchQuery.toLowerCase());
+        tokens.length === 0 || tokens.every((token) => haystack.includes(token));
 
       const matchesDepartment =
         filterDepartment === 'all' || employee.department === filterDepartment;
@@ -235,7 +243,17 @@ export default function Employees() {
 
       return matchesSearch && matchesDepartment && matchesStatus;
     });
-  }, [employees, searchQuery, filterDepartment, filterStatus]);
+
+    const direction = sortOrder === 'az' ? 1 : -1;
+    const safeCompare = (a: string, b: string) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' }) * direction;
+
+    return filtered.sort((a, b) => {
+      const last = safeCompare(a.lastName || '', b.lastName || '');
+      if (last !== 0) return last;
+      return safeCompare(a.firstName || '', b.firstName || '');
+    });
+  }, [employees, searchQuery, filterDepartment, filterStatus, sortOrder]);
 
   const departments = useMemo(
     () => [...new Set(employees.map((e) => e.department).filter(Boolean))],
@@ -667,12 +685,12 @@ export default function Employees() {
             disabled={!canCreateEmployee || isImporting}
             title={!canCreateEmployee ? accessDeniedMessage('creating employees') : undefined}
           >
-            <Upload className="h-4 w-4 mr-2" />
+            <Download className="h-4 w-4 mr-2" />
             {isImporting ? 'Importing…' : 'Import CSV'}
           </Button>
 
           <Button variant="outline" onClick={handleExport} disabled={filteredEmployees.length === 0}>
-            <Download className="h-4 w-4 mr-2" />
+            <Upload className="h-4 w-4 mr-2" />
             Export
           </Button>
 
@@ -727,146 +745,298 @@ export default function Employees() {
                 <SelectItem value="onboarding">Onboarding</SelectItem>
               </SelectContent>
             </Select>
+
+            <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as 'az' | 'za')}>
+              <SelectTrigger className="w-full sm:w-36">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="az">Name A-Z</SelectItem>
+                <SelectItem value="za">Name Z-A</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <ToggleGroup
+              type="single"
+              value={viewMode}
+              onValueChange={(v) => v && setViewMode(v as 'grid' | 'list')}
+              className="justify-start"
+            >
+              <ToggleGroupItem value="grid" aria-label="Grid view">
+                <LayoutGrid className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="list" aria-label="List view">
+                <List className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
         </CardContent>
       </Card>
 
       {/* Employee Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredEmployees.map((employee) => (
-          <Card
-            key={employee.id}
-            className="card-interactive cursor-pointer"
-            onClick={() => handleViewProfile(employee)}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <Avatar className="h-12 w-12 avatar-ring">
-                    <AvatarImage src={employee.avatar} alt={`${employee.firstName} ${employee.lastName}`} />
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                      {employee.firstName[0]}
-                      {employee.lastName[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-semibold">
-                      {employee.firstName} {employee.lastName}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">{employee.position}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span
-                        className={cn(
-                          'text-xs px-2 py-0.5 rounded-full font-medium',
-                          employmentTypeColors[employee.employmentType]
-                        )}
-                      >
-                        {employmentTypeLabels[employee.employmentType]}
-                      </span>
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredEmployees.map((employee) => (
+            <Card
+              key={employee.id}
+              className="card-interactive cursor-pointer"
+              onClick={() => handleViewProfile(employee)}
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4">
+                    <Avatar className="h-12 w-12 avatar-ring">
+                      <AvatarImage src={employee.avatar} alt={`${employee.firstName} ${employee.lastName}`} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                        {employee.firstName[0]}
+                        {employee.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="font-semibold">
+                        {employee.firstName} {employee.lastName}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">{employee.position}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span
+                          className={cn(
+                            'text-xs px-2 py-0.5 rounded-full font-medium',
+                            employmentTypeColors[employee.employmentType]
+                          )}
+                        >
+                          {employmentTypeLabels[employee.employmentType]}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
 
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewProfile(employee);
-                      }}
-                    >
-                      View Profile
-                    </DropdownMenuItem>
-
-                    {/* Hide edit actions if user cannot manage employees */}
-                    {canManageEmployees ? (
-                      <>
-                        <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                          Edit Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                          View Documents
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className={employee.status === 'inactive' ? 'text-success' : 'text-destructive'}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeactivateEmployee(employee);
-                          }}
-                        >
-                          {employee.status === 'inactive' ? 'Reactivate' : 'Deactivate'}
-                        </DropdownMenuItem>
-                      </>
-                    ) : (
+                    <DropdownMenuContent align="end">
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
-                          toast({
-                            title: 'Access restricted',
-                            description: accessDeniedMessage('employee records'),
-                            variant: 'destructive',
-                          });
+                          handleViewProfile(employee);
                         }}
                       >
-                        No actions available
+                        View Profile
                       </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
 
-              <div className="mt-4 pt-4 border-t border-border space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Department</span>
-                  <span className="font-medium">{employee.department || 'Not assigned'}</span>
+                      {/* Hide edit actions if user cannot manage employees */}
+                      {canManageEmployees ? (
+                        <>
+                          <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            Edit Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            View Documents
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className={employee.status === 'inactive' ? 'text-success' : 'text-destructive'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeactivateEmployee(employee);
+                            }}
+                          >
+                            {employee.status === 'inactive' ? 'Reactivate' : 'Deactivate'}
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toast({
+                              title: 'Access restricted',
+                              description: accessDeniedMessage('employee records'),
+                              variant: 'destructive',
+                            });
+                          }}
+                        >
+                          No actions available
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Compliance</span>
-                  <StatusBadge status={employee.complianceStatus} size="sm" />
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Pay Rate</span>
-                  <span className="font-medium">${(employee.payRate || 0).toFixed(2)}/hr</span>
-                </div>
-              </div>
 
-              <div className="mt-4 pt-4 border-t border-border flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.location.href = `mailto:${employee.email}`;
-                  }}
-                >
-                  <Mail className="h-4 w-4 mr-1" />
-                  Email
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.location.href = `tel:${employee.phone}`;
-                  }}
-                >
-                  <Phone className="h-4 w-4 mr-1" />
-                  Call
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <div className="mt-4 pt-4 border-t border-border space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Department</span>
+                    <span className="font-medium">{employee.department || 'Not assigned'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Compliance</span>
+                    <StatusBadge status={employee.complianceStatus} size="sm" />
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Pay Rate</span>
+                    <span className="font-medium">${(employee.payRate || 0).toFixed(2)}/hr</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-border flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.location.href = `mailto:${employee.email}`;
+                    }}
+                  >
+                    <Mail className="h-4 w-4 mr-1" />
+                    Email
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.location.href = `tel:${employee.phone}`;
+                    }}
+                  >
+                    <Phone className="h-4 w-4 mr-1" />
+                    Call
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Employee List View */}
+      {viewMode === 'list' && (
+        <div className="space-y-3">
+          {filteredEmployees.map((employee) => (
+            <Card
+              key={employee.id}
+              className="card-interactive cursor-pointer"
+              onClick={() => handleViewProfile(employee)}
+            >
+              <CardContent className="py-4">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <Avatar className="h-10 w-10 avatar-ring">
+                      <AvatarImage src={employee.avatar} alt={`${employee.firstName} ${employee.lastName}`} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                        {employee.firstName[0]}
+                        {employee.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <div className="font-semibold truncate">
+                        {employee.firstName} {employee.lastName}
+                      </div>
+                      <div className="text-sm text-muted-foreground truncate">{employee.position}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    <span
+                      className={cn(
+                        'text-xs px-2 py-0.5 rounded-full font-medium',
+                        employmentTypeColors[employee.employmentType]
+                      )}
+                    >
+                      {employmentTypeLabels[employee.employmentType]}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {employee.department || 'Not assigned'}
+                    </span>
+                    <StatusBadge status={employee.complianceStatus} size="sm" />
+                    <span className="font-medium">${(employee.payRate || 0).toFixed(2)}/hr</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.location.href = `mailto:${employee.email}`;
+                      }}
+                    >
+                      <Mail className="h-4 w-4 mr-1" />
+                      Email
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.location.href = `tel:${employee.phone}`;
+                      }}
+                    >
+                      <Phone className="h-4 w-4 mr-1" />
+                      Call
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewProfile(employee);
+                          }}
+                        >
+                          View Profile
+                        </DropdownMenuItem>
+
+                        {canManageEmployees ? (
+                          <>
+                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                              Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                              View Documents
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className={employee.status === 'inactive' ? 'text-success' : 'text-destructive'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeactivateEmployee(employee);
+                              }}
+                            >
+                              {employee.status === 'inactive' ? 'Reactivate' : 'Deactivate'}
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toast({
+                                title: 'Access restricted',
+                                description: accessDeniedMessage('employee records'),
+                                variant: 'destructive',
+                              });
+                            }}
+                          >
+                            No actions available
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {filteredEmployees.length === 0 && (
         <Card>
