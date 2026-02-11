@@ -42,6 +42,7 @@ import { Link } from 'react-router-dom';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
+import { useSettings } from '@/hooks/useSettings';
 import { supabase } from '@/integrations/supabase/client';
 import type {
   EmployeeDB,
@@ -133,7 +134,7 @@ function dbToLegacyEmployee(
     status: emp.status as Employee['status'],
     complianceStatus: emp.compliance_status as ComplianceStatus,
     payRate: emp.pay_rate || 0,
-    awardClassification: undefined,
+    awardClassification: emp.award_classification_id || undefined,
     emergencyContact: emp.emergency_contact_name
       ? {
           name: emp.emergency_contact_name,
@@ -269,6 +270,7 @@ export default function Employees() {
     organisationId,
     isCreating,
   } = useSupabaseEmployees();
+  const { awardClassifications } = useSettings(organisationId);
 
   // Who is allowed by your current employees RLS
   const canManageEmployees = isPlatformUser || isAdmin || isManager;
@@ -384,18 +386,19 @@ export default function Employees() {
     if (!dbEmployee) return;
 
     try {
-      await updateEmployee(updatedEmployee.id, {
-        first_name: updatedEmployee.firstName,
-        last_name: updatedEmployee.lastName,
-        email: updatedEmployee.email,
-        phone: updatedEmployee.phone || null,
-        position: updatedEmployee.position || null,
-        department: updatedEmployee.department || null,
-        employment_type: updatedEmployee.employmentType as EmploymentTypeDB,
-        pay_rate: updatedEmployee.payRate || null,
-        status: updatedEmployee.status as EmployeeStatusDB,
-        compliance_status: updatedEmployee.complianceStatus as ComplianceStatusDB,
-        emergency_contact_name: updatedEmployee.emergencyContact?.name || null,
+    await updateEmployee(updatedEmployee.id, {
+      first_name: updatedEmployee.firstName,
+      last_name: updatedEmployee.lastName,
+      email: updatedEmployee.email,
+      phone: updatedEmployee.phone || null,
+      position: updatedEmployee.position || null,
+      department: updatedEmployee.department || null,
+      employment_type: updatedEmployee.employmentType as EmploymentTypeDB,
+      pay_rate: updatedEmployee.payRate || null,
+      award_classification_id: updatedEmployee.awardClassification || null,
+      status: updatedEmployee.status as EmployeeStatusDB,
+      compliance_status: updatedEmployee.complianceStatus as ComplianceStatusDB,
+      emergency_contact_name: updatedEmployee.emergencyContact?.name || null,
         emergency_contact_phone: updatedEmployee.emergencyContact?.phone || null,
         emergency_contact_relationship:
           updatedEmployee.emergencyContact?.relationship || null,
@@ -1327,6 +1330,7 @@ export default function Employees() {
         open={detailSheetOpen}
         onOpenChange={setDetailSheetOpen}
         onUpdate={handleUpdateEmployee}
+        awardClassifications={awardClassifications}
         onSaveCertification={(certification, documentFile, overallStatus) => {
           if (selectedEmployee) {
             return handleSaveCertification(selectedEmployee, certification, documentFile, overallStatus);

@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Employee, EmploymentType, Document, Certification, ComplianceStatus } from '@/types/hrms';
+import type { AwardClassification } from '@/hooks/useSettings';
 import { format, differenceInDays, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -34,6 +35,7 @@ interface EmployeeDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate?: (updatedEmployee: Employee) => void;
+  awardClassifications?: AwardClassification[];
   onSaveCertification?: (
     certification: Certification,
     documentFile: File | undefined,
@@ -65,6 +67,7 @@ export function EmployeeDetailSheet({
   open,
   onOpenChange,
   onUpdate,
+  awardClassifications = [],
   onSaveCertification,
   onDeleteCertification,
   onUploadDocument,
@@ -307,6 +310,9 @@ export function EmployeeDetailSheet({
     emergencyContact: emp.emergencyContact,
   });
 
+  const awardLabel =
+    awardClassifications.find((award) => award.id === employee.awardClassification)?.name || 'Not set';
+
   const handleStartEdit = () => {
     setEditData(buildEditData(employee));
     setIsEditing(true);
@@ -512,12 +518,24 @@ export function EmployeeDetailSheet({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="edit-award">Award Classification</Label>
-                    <Input
-                      id="edit-award"
+                    <Select
                       value={editData.awardClassification || ''}
-                      onChange={(e) => setEditData({ ...editData, awardClassification: e.target.value })}
-                      placeholder="e.g., Level 2.1"
-                    />
+                      onValueChange={(value) =>
+                        setEditData({ ...editData, awardClassification: value || undefined })
+                      }
+                    >
+                      <SelectTrigger id="edit-award">
+                        <SelectValue placeholder="Select award classification" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        <SelectItem value="">Not set</SelectItem>
+                        {awardClassifications.map((award) => (
+                          <SelectItem key={award.id} value={award.id}>
+                            {award.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               ) : (
@@ -536,7 +554,7 @@ export function EmployeeDetailSheet({
                   </div>
                   <div>
                     <p className="text-muted-foreground">Award Classification</p>
-                    <p className="font-medium">{employee.awardClassification || 'Not set'}</p>
+                    <p className="font-medium">{awardLabel}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Status</p>
