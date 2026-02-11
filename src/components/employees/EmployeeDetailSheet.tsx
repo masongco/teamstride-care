@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Upload, Plus, AlertTriangle, CheckCircle, Pencil } from 'lucide-react';
 import {
   Sheet,
@@ -29,6 +29,7 @@ import { format, differenceInDays, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { CertificationDialog } from './CertificationDialog';
+import { supabase } from '@/integrations/supabase/client';
 
 interface EmployeeDetailSheetProps {
   employee: Employee | null;
@@ -76,9 +77,12 @@ export function EmployeeDetailSheet({
   const [editData, setEditData] = useState<Partial<Employee>>({});
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [certDialogOpen, setCertDialogOpen] = useState(false);
   const [selectedCertification, setSelectedCertification] = useState<Certification | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   if (!employee) return null;
 
@@ -348,9 +352,26 @@ export function EmployeeDetailSheet({
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditData({});
+    if (avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+    setAvatarPreview(null);
+    setAvatarFile(null);
   };
 
-  const handleSave = () => {
+  const uploadAvatar = async (file: File) => {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `employees/${employee.id}/${Date.now()}-${safeName}`;
+    const { error: uploadError } = await supabase.storage
+      .from('employee-avatars')
+      .upload(filePath, file);
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from('employee-avatars').getPublicUrl(filePath);
+    return data.publicUrl;
+  };
+
+  const handleSave = async () => {
     if (!editData.firstName || !editData.lastName || !editData.email) {
       toast({
         title: 'Missing Information',
@@ -360,14 +381,34 @@ export function EmployeeDetailSheet({
       return;
     }
 
+    let avatarUrl = employee.avatar;
+    if (avatarFile) {
+      try {
+        avatarUrl = await uploadAvatar(avatarFile);
+      } catch (err: any) {
+        toast({
+          title: 'Upload failed',
+          description: err?.message || 'Unable to upload profile photo.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     const updatedEmployee: Employee = {
       ...employee,
       ...editData,
+      avatar: avatarUrl,
     } as Employee;
 
     onUpdate?.(updatedEmployee);
     setIsEditing(false);
     setEditData({});
+    if (avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+    setAvatarPreview(null);
+    setAvatarFile(null);
     
     toast({
       title: 'Profile Updated',
@@ -379,8 +420,43 @@ export function EmployeeDetailSheet({
     if (!openState) {
       setIsEditing(false);
       setEditData({});
+      if (avatarPreview) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+      setAvatarPreview(null);
+      setAvatarFile(null);
     }
     onOpenChange(openState);
+  };
+
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: 'Invalid File Type',
+        description: 'Please upload an image file.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        title: 'File Too Large',
+        description: 'Please upload a file smaller than 5MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
   };
 
   return (
@@ -389,6 +465,10 @@ export function EmployeeDetailSheet({
         <SheetHeader>
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 avatar-ring">
+              <AvatarImage
+                src={isEditing ? avatarPreview || employee.avatar : employee.avatar}
+                alt={`${employee.firstName} ${employee.lastName}`}
+              />
               <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">
                 {(isEditing ? editData.firstName?.[0] : employee.firstName[0]) || 'E'}
                 {(isEditing ? editData.lastName?.[0] : employee.lastName[0]) || 'E'}
@@ -397,6 +477,38 @@ export function EmployeeDetailSheet({
             <div className="flex-1">
               {isEditing ? (
                 <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => avatarInputRef.current?.click()}
+                    >
+                      {avatarPreview ? 'Change Photo' : 'Upload Photo'}
+                    </Button>
+                    {avatarPreview && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+                          setAvatarPreview(null);
+                          setAvatarFile(null);
+                          if (avatarInputRef.current) avatarInputRef.current.value = '';
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarChange}
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <Input
                       value={editData.firstName || ''}

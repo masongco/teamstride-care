@@ -386,14 +386,15 @@ export default function Employees() {
     if (!dbEmployee) return;
 
     try {
-    await updateEmployee(updatedEmployee.id, {
-      first_name: updatedEmployee.firstName,
-      last_name: updatedEmployee.lastName,
-      email: updatedEmployee.email,
-      phone: updatedEmployee.phone || null,
-      position: updatedEmployee.position || null,
-      department: updatedEmployee.department || null,
-      employment_type: updatedEmployee.employmentType as EmploymentTypeDB,
+      await updateEmployee(updatedEmployee.id, {
+        first_name: updatedEmployee.firstName,
+        last_name: updatedEmployee.lastName,
+        email: updatedEmployee.email,
+        phone: updatedEmployee.phone || null,
+        avatar_url: updatedEmployee.avatar || null,
+        position: updatedEmployee.position || null,
+        department: updatedEmployee.department || null,
+        employment_type: updatedEmployee.employmentType as EmploymentTypeDB,
       pay_rate: updatedEmployee.payRate || null,
       award_classification_id: updatedEmployee.awardClassification || null,
       status: updatedEmployee.status as EmployeeStatusDB,
