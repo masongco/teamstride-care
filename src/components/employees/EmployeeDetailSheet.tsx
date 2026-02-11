@@ -444,11 +444,11 @@ export function EmployeeDetailSheet({
       return;
     }
 
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = 20 * 1024 * 1024;
     if (file.size > maxSize) {
       toast({
         title: 'File Too Large',
-        description: 'Please upload a file smaller than 5MB.',
+        description: 'Please upload a file smaller than 20MB.',
         variant: 'destructive',
       });
       return;

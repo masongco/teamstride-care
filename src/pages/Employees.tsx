@@ -86,14 +86,6 @@ function dbCertToLegacyCertification(cert: EmployeeCertificationDB): Certificati
   };
 }
 
-function dbCertToDocument(
-  cert: EmployeeCertificationDB,
-  employeeDocs: Document[]
-): Document | null {
-  if (!cert.document_id) return null;
-  return employeeDocs.find((doc) => doc.id === cert.document_id) ?? null;
-}
-
 function deriveComplianceStatus(certs: EmployeeCertificationDB[]): ComplianceStatus {
   if (certs.length === 0) return 'pending';
   const statuses = certs.map((c) => c.status as ComplianceStatus);
@@ -127,12 +119,10 @@ function dbToLegacyEmployee(
   certs: EmployeeCertificationDB[],
   employeeDocs: Document[]
 ): Employee {
-  const certDocs = certs
-    .map((cert) => dbCertToDocument(cert, employeeDocs))
-    .filter((doc): doc is Document => Boolean(doc));
-  const mergedDocs = [...certDocs, ...employeeDocs].filter((doc, index, arr) => {
-    return arr.findIndex((d) => d.id === doc.id) === index;
-  });
+  const certDocIds = new Set(
+    certs.map((cert) => cert.document_id).filter((id): id is string => isUuid(id))
+  );
+  const nonComplianceDocs = employeeDocs.filter((doc) => !certDocIds.has(doc.id));
 
   return {
     id: emp.id,
@@ -156,7 +146,7 @@ function dbToLegacyEmployee(
           relationship: emp.emergency_contact_relationship || '',
         }
       : undefined,
-    documents: mergedDocs,
+    documents: nonComplianceDocs,
     certifications: certs.map(dbCertToLegacyCertification),
   };
 }
