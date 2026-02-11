@@ -96,11 +96,11 @@ export function AddEmployeeDialog({ open, onOpenChange, onAdd }: AddEmployeeDial
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const maxSize = 20 * 1024 * 1024;
+      const maxSize = 7 * 1024 * 1024;
       if (file.size > maxSize) {
         toast({
           title: 'File too large',
-          description: 'Please select an image under 20MB',
+          description: 'Please select an image under 7MB',
           variant: 'destructive',
         });
         return;
