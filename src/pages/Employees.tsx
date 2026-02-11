@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Plus,
@@ -290,9 +290,9 @@ export default function Employees() {
 
   const [employeeDocsMap, setEmployeeDocsMap] = useState<Record<string, Document[]>>({});
 
-  const fetchEmployeeDocuments = async (employeeIds: string[], replaceAll = false) => {
+  const fetchEmployeeDocuments = useCallback(async (employeeIds: string[], replaceAll = false) => {
     if (employeeIds.length === 0) {
-      setEmployeeDocsMap({});
+      setEmployeeDocsMap((prev) => (Object.keys(prev).length ? {} : prev));
       return;
     }
 
@@ -313,12 +313,22 @@ export default function Employees() {
     });
 
     setEmployeeDocsMap((prev) => (replaceAll ? map : { ...prev, ...map }));
-  };
+  }, []);
+
+  const employeeIdsKey = useMemo(
+    () => dbEmployees.map((e) => e.id).sort().join('|'),
+    [dbEmployees]
+  );
 
   useEffect(() => {
-    const ids = dbEmployees.map((e) => e.id);
+    if (!employeeIdsKey) {
+      setEmployeeDocsMap((prev) => (Object.keys(prev).length ? {} : prev));
+      return;
+    }
+
+    const ids = employeeIdsKey.split('|');
     fetchEmployeeDocuments(ids, true);
-  }, [dbEmployees]);
+  }, [employeeIdsKey, fetchEmployeeDocuments]);
 
   // Convert DB employees to legacy format for UI compatibility
   const employees = useMemo(
