@@ -75,6 +75,7 @@ export function EmployeeDetailSheet({
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Employee>>({});
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
   const [certDialogOpen, setCertDialogOpen] = useState(false);
   const [selectedCertification, setSelectedCertification] = useState<Certification | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,8 +212,11 @@ export function EmployeeDetailSheet({
     });
   };
 
-  const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleDocumentUpload = async (
+    eventOrFile: React.ChangeEvent<HTMLInputElement> | File
+  ) => {
+    const file =
+      eventOrFile instanceof File ? eventOrFile : eventOrFile.target.files?.[0];
     if (!file) return;
 
     // Validate file type
@@ -254,7 +258,7 @@ export function EmployeeDetailSheet({
         });
       } finally {
         setIsUploadingDocument(false);
-        if (fileInputRef.current) {
+        if (!(eventOrFile instanceof File) && fileInputRef.current) {
           fileInputRef.current.value = '';
         }
       }
@@ -283,13 +287,35 @@ export function EmployeeDetailSheet({
       description: `${file.name} has been uploaded successfully.`,
     });
 
-    if (fileInputRef.current) {
+    if (!(eventOrFile instanceof File) && fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isDragActive) setIsDragActive(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragActive(false);
+  };
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragActive(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) {
+      await handleDocumentUpload(file);
+    }
   };
 
   // Calculate compliance percentage
@@ -755,14 +781,23 @@ export function EmployeeDetailSheet({
                       <Upload className="h-3 w-3 mr-1" />
                       {isUploadingDocument ? 'Uploading...' : 'Upload'}
                     </Button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={handleDocumentUpload}
-                    />
-                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={handleDocumentUpload}
+                  />
+                </div>
+                <div
+                  className={cn(
+                    'rounded-lg border-2 border-dashed p-3 transition-colors',
+                    isDragActive ? 'border-primary bg-primary/5' : 'border-muted'
+                  )}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                   {employee.documents.length > 0 ? (
                     <div className="space-y-2">
                       {employee.documents.map((doc) => (
@@ -790,11 +825,26 @@ export function EmployeeDetailSheet({
                           </div>
                         </div>
                       ))}
+                      <div className="flex items-center justify-between pt-2">
+                        <p className="text-xs text-muted-foreground">
+                          Drag and drop a file here, or
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleUploadClick}
+                          disabled={isUploadingDocument}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add Document
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="text-center py-4 border-2 border-dashed border-muted rounded-lg">
+                    <div className="text-center py-4">
                       <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                       <p className="text-sm text-muted-foreground mb-2">No documents uploaded</p>
+                      <p className="text-xs text-muted-foreground mb-3">Drag and drop a file here</p>
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -806,6 +856,7 @@ export function EmployeeDetailSheet({
                       </Button>
                     </div>
                   )}
+                </div>
                 </div>
 
                 {/* Emergency Contact */}

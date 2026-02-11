@@ -63,6 +63,7 @@ const categoryOptions: { value: OrgDocumentCategory; label: string }[] = [
 export function UploadDocumentDialog({ open, onOpenChange }: UploadDocumentDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadDocument } = useOrgDocuments();
 
@@ -77,16 +78,37 @@ export function UploadDocumentDialog({ open, onOpenChange }: UploadDocumentDialo
     },
   });
 
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file);
+    if (!form.getValues('title')) {
+      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+      form.setValue('title', nameWithoutExt);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      // Auto-fill title from filename if empty
-      if (!form.getValues('title')) {
-        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-        form.setValue('title', nameWithoutExt);
-      }
-    }
+    if (file) handleFileSelect(file);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isDragActive) setIsDragActive(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragActive(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragActive(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) handleFileSelect(file);
   };
 
   const handleRemoveFile = () => {
@@ -158,7 +180,12 @@ export function UploadDocumentDialog({ open, onOpenChange }: UploadDocumentDialo
               ) : (
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors"
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                    isDragActive ? 'border-primary bg-primary/5' : 'hover:border-primary'
+                  }`}
                 >
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
