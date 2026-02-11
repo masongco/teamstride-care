@@ -57,6 +57,15 @@ interface EmployeeWithCerts extends EmployeeDB {
   certifications: EmployeeCertificationDB[];
 }
 
+function deriveComplianceStatus(certs: EmployeeCertificationDB[]): ComplianceStatusDB {
+  if (certs.length === 0) return 'pending';
+  const statuses = certs.map((c) => c.status);
+  if (statuses.includes('expired')) return 'expired';
+  if (statuses.includes('expiring')) return 'expiring';
+  if (statuses.includes('pending')) return 'pending';
+  return 'compliant';
+}
+
 export default function Compliance() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
@@ -77,10 +86,14 @@ export default function Compliance() {
   const activeEmployees = useMemo(() => {
     return dbEmployees
       .filter((e) => e.status !== 'inactive')
-      .map((emp): EmployeeWithCerts => ({
-        ...emp,
-        certifications: getCertificationsForEmployee(emp.id),
-      }));
+      .map((emp): EmployeeWithCerts => {
+        const certs = getCertificationsForEmployee(emp.id);
+        return {
+          ...emp,
+          certifications: certs,
+          compliance_status: deriveComplianceStatus(certs),
+        };
+      });
   }, [dbEmployees, getCertificationsForEmployee]);
 
   // Get unique departments and certification types from Supabase data

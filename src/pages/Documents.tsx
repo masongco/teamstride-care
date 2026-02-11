@@ -31,6 +31,7 @@ export default function Documents() {
   const acknowledgedDistributions = distributions.filter(d => 
     d.status === 'acknowledged' || d.status === 'signed'
   );
+  const metricsLoading = docsLoading || distLoading;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -52,28 +53,28 @@ export default function Documents() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Total Documents"
-          value={activeDocuments.length}
+          value={metricsLoading ? '—' : activeDocuments.length}
           description="Active documents"
           icon={FileText}
           variant="default"
         />
         <MetricCard
           title="Categories"
-          value={new Set(documents.map(d => d.category)).size}
+          value={metricsLoading ? '—' : new Set(documents.map(d => d.category)).size}
           description="Document types"
           icon={FolderOpen}
           variant="info"
         />
         <MetricCard
           title="Pending Actions"
-          value={pendingDistributions.length}
+          value={metricsLoading ? '—' : pendingDistributions.length}
           description="Awaiting response"
           icon={Send}
           variant="warning"
         />
         <MetricCard
           title="Completed"
-          value={acknowledgedDistributions.length}
+          value={metricsLoading ? '—' : acknowledgedDistributions.length}
           description="Acknowledged/Signed"
           icon={BarChart3}
           variant="success"
