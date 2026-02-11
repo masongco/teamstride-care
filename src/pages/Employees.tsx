@@ -67,6 +67,13 @@ const employmentTypeColors: Record<EmploymentType, string> = {
   contractor: 'bg-warning/10 text-warning',
 };
 
+function isUuid(value?: string | null) {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
 function dbCertToLegacyCertification(cert: EmployeeCertificationDB): Certification {
   return {
     id: cert.id,
@@ -75,7 +82,7 @@ function dbCertToLegacyCertification(cert: EmployeeCertificationDB): Certificati
     issueDate: cert.issue_date || '',
     expiryDate: cert.expiry_date || '',
     status: cert.status as ComplianceStatus,
-    documentId: cert.document_id || undefined,
+    documentId: isUuid(cert.document_id) ? cert.document_id : undefined,
   };
 }
 
@@ -464,6 +471,7 @@ export default function Employees() {
     issueDate?: string,
     expiryDate?: string
   ) => {
+    const documentTypeId = await getDefaultDocumentTypeId();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const filePath = `certifications/${employeeId}/${Date.now()}-${safeName}`;
 
@@ -475,8 +483,6 @@ export default function Employees() {
 
     const { data } = supabase.storage.from('employee-documents').getPublicUrl(filePath);
     const fileUrl = data.publicUrl;
-
-    const documentTypeId = await getDefaultDocumentTypeId();
 
     const { data: inserted, error: insertError } = await supabase
       .from('employee_documents')
@@ -513,9 +519,33 @@ export default function Employees() {
       .limit(1);
 
     if (error) throw error;
-    const row = data?.[0];
-    if (!row) throw new Error('No active document types found.');
-    return row.id;
+    const activeRow = data?.[0];
+    if (activeRow) return activeRow.id;
+
+    const { data: anyData, error: anyError } = await supabase
+      .from('document_types')
+      .select('id,name')
+      .order('display_order', { ascending: true })
+      .limit(1);
+
+    if (anyError) throw anyError;
+    const anyRow = anyData?.[0];
+    if (anyRow) return anyRow.id;
+
+    const { data: created, error: createError } = await supabase
+      .from('document_types')
+      .insert({
+        name: 'General Document',
+        description: 'Auto-created for employee document uploads',
+        is_active: true,
+        is_required: false,
+        display_order: 0,
+      })
+      .select('id')
+      .single();
+
+    if (createError) throw createError;
+    return created.id;
   };
 
   const handleUploadEmployeeDocument = async (employee: Employee, file: File) => {
@@ -528,6 +558,7 @@ export default function Employees() {
       return;
     }
 
+    const documentTypeId = await getDefaultDocumentTypeId();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const filePath = `employees/${employee.id}/documents/${Date.now()}-${safeName}`;
 
@@ -539,8 +570,6 @@ export default function Employees() {
 
     const { data } = supabase.storage.from('employee-documents').getPublicUrl(filePath);
     const fileUrl = data.publicUrl;
-
-    const documentTypeId = await getDefaultDocumentTypeId();
 
     const { error: insertError } = await supabase
       .from('employee_documents')
@@ -588,6 +617,9 @@ export default function Employees() {
 
     try {
       let documentId = certification.documentId || undefined;
+      if (documentId && !isUuid(documentId)) {
+        documentId = undefined;
+      }
 
       if (documentFile) {
         documentId = await uploadCertificationDocument(
