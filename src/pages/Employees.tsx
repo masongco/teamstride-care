@@ -61,10 +61,10 @@ const employmentTypeLabels: Record<EmploymentType, string> = {
 };
 
 const employmentTypeColors: Record<EmploymentType, string> = {
-  casual: 'bg-info text-info-foreground border border-info/70',
-  part_time: 'bg-primary text-primary-foreground border border-primary/70',
-  full_time: 'bg-success text-success-foreground border border-success/70',
-  contractor: 'bg-warning text-warning-foreground border border-warning/70',
+  casual: 'bg-info/10 text-info',
+  part_time: 'bg-primary/10 text-primary',
+  full_time: 'bg-success/10 text-success',
+  contractor: 'bg-warning/10 text-warning',
 };
 
 function dbCertToLegacyCertification(cert: EmployeeCertificationDB): Certification {

@@ -158,19 +158,19 @@
 @layer components {
   /* Status Badge Variants */
   .status-compliant {
-    @apply bg-success text-success-foreground border-success/70;
+    @apply bg-success/10 text-success border-success/20;
   }
   
   .status-expiring {
-    @apply bg-warning text-warning-foreground border-warning/70;
+    @apply bg-warning/10 text-warning border-warning/20;
   }
   
   .status-expired {
-    @apply bg-destructive text-destructive-foreground border-destructive/70;
+    @apply bg-destructive/10 text-destructive border-destructive/20;
   }
   
   .status-pending {
-    @apply bg-info text-info-foreground border-info/70;
+    @apply bg-info/10 text-info border-info/20;
   }
   
   /* Card Hover Effect */

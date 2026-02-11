@@ -28,6 +28,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Separator } from '@/components/ui/separator';
 import { useSidebarSettings } from '@/hooks/useSidebarSettings';
 import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
+import type { EmployeeCertificationDB } from '@/types/database';
 
 interface NavItem {
   label: string;
@@ -72,14 +73,25 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { settings, loading, isModuleVisible } = useSidebarSettings();
-  const { employees } = useSupabaseEmployees();
+  const { employees, getCertificationsForEmployee } = useSupabaseEmployees();
+
+  const deriveComplianceStatus = (certs: EmployeeCertificationDB[]) => {
+    if (certs.length === 0) return 'pending';
+    const statuses = certs.map((c) => c.status);
+    if (statuses.includes('expired')) return 'expired';
+    if (statuses.includes('expiring')) return 'expiring';
+    if (statuses.includes('pending')) return 'pending';
+    return 'compliant';
+  };
 
   const pendingComplianceCount = useMemo(() => {
     if (employees.length === 0) return 0;
     return employees.filter(
-      (employee) => employee.status !== 'inactive' && employee.compliance_status === 'pending',
+      (employee) =>
+        employee.status !== 'inactive' &&
+        deriveComplianceStatus(getCertificationsForEmployee(employee.id)) === 'pending',
     ).length;
-  }, [employees]);
+  }, [employees, getCertificationsForEmployee]);
 
   const navItems = useMemo(
     () =>
