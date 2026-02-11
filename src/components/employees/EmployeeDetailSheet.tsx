@@ -73,6 +73,7 @@ export function EmployeeDetailSheet({
   onDeleteCertification,
   onUploadDocument,
 }: EmployeeDetailSheetProps) {
+  const NO_AWARD_VALUE = '__none__';
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Employee>>({});
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
@@ -657,16 +658,19 @@ export function EmployeeDetailSheet({
                   <div className="space-y-2">
                     <Label htmlFor="edit-award">Award Classification</Label>
                     <Select
-                      value={editData.awardClassification || ''}
+                      value={editData.awardClassification ?? NO_AWARD_VALUE}
                       onValueChange={(value) =>
-                        setEditData({ ...editData, awardClassification: value || undefined })
+                        setEditData({
+                          ...editData,
+                          awardClassification: value === NO_AWARD_VALUE ? undefined : value,
+                        })
                       }
                     >
                       <SelectTrigger id="edit-award">
                         <SelectValue placeholder="Select award classification" />
                       </SelectTrigger>
                       <SelectContent className="bg-popover">
-                        <SelectItem value="">Not set</SelectItem>
+                        <SelectItem value={NO_AWARD_VALUE}>Not set</SelectItem>
                         {awardClassifications.map((award) => (
                           <SelectItem key={award.id} value={award.id}>
                             {award.name}
