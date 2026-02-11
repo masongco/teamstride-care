@@ -72,12 +72,27 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
     setIsSubmitting(true);
     
     try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user) {
+        throw new Error('Unable to resolve current user');
+      }
+
+      const { data: orgIdData, error: orgIdError } = await supabase.rpc(
+        'get_user_organisation_id',
+        { _user_id: authData.user.id },
+      );
+
+      if (orgIdError || !orgIdData) {
+        throw new Error('Unable to resolve organisation for user');
+      }
+
       const { data, error } = await supabase.functions.invoke('create-user', {
         body: {
           email: formData.email.trim(),
           password: formData.password,
           display_name: formData.display_name.trim(),
           role: formData.role,
+          organisation_id: orgIdData,
         },
       });
 
@@ -87,6 +102,33 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
 
       if (data?.error) {
         throw new Error(data.error);
+      }
+
+      if (!data?.user?.id) {
+        throw new Error('User created, but response is missing user id.');
+      }
+
+      const { error: assignError } = await supabase.rpc('admin_assign_profile_org' as any, {
+        _user_id: data.user.id,
+        _org_id: orgIdData,
+      });
+
+      if (assignError) {
+        const { data: profileUpdateData, error: profileUpdateError } = await supabase
+          .from('profiles')
+          .upsert(
+            {
+              user_id: data.user.id,
+              organisation_id: orgIdData,
+            },
+            { onConflict: 'user_id' },
+          )
+          .select('organisation_id')
+          .maybeSingle();
+
+        if (profileUpdateError || !profileUpdateData?.organisation_id) {
+          throw new Error('User created, but failed to assign organisation.');
+        }
       }
 
       toast({

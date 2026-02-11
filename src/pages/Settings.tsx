@@ -111,14 +111,6 @@ export default function Settings() {
     isPlatformAdmin,
     loading: roleLoading,
   } = useUserRole();
-  const {
-    users,
-    loading: usersLoading,
-    updateUserRole,
-    deleteUserRole,
-    fetchUsersWithRoles,
-  } = useUserRolesManagement();
-
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
   const [orgIdLoading, setOrgIdLoading] = useState(true);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
@@ -173,8 +165,15 @@ export default function Settings() {
     (org) => org.id === selectedOrgId,
   );
   const settingsOrganisationId = isPlatformAdmin
-    ? selectedOrgId ?? undefined
+    ? selectedOrgId ?? currentOrgId ?? undefined
     : currentOrgId ?? undefined;
+  const {
+    users,
+    loading: usersLoading,
+    updateUserRole,
+    deleteUserRole,
+    fetchUsersWithRoles,
+  } = useUserRolesManagement(settingsOrganisationId);
   const requireOrganisation =
     isPlatformAdmin || currentUserRole === 'admin' || currentUserRole === 'manager';
   const shouldBlockSettings =

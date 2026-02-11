@@ -10,6 +10,7 @@ interface CreateUserRequest {
   password: string
   display_name: string
   role: 'admin' | 'manager' | 'employee'
+  organisation_id?: string
 }
 
 Deno.serve(async (req) => {
@@ -118,6 +119,27 @@ Deno.serve(async (req) => {
     // Create admin client with service role key
     const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Get requesting user's organisation_id to apply to new profile
+    const { data: orgIdData, error: orgIdError } = await adminClient
+      .rpc('get_user_organisation_id', { _user_id: requestingUser.id })
+
+    if (orgIdError) {
+      console.error('Failed to resolve organisation id:', orgIdError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to resolve organisation for creator' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const resolvedOrgId = body.organisation_id || orgIdData
+
+    if (!resolvedOrgId) {
+      return new Response(
+        JSON.stringify({ error: 'Creator has no organisation assigned' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Create the new user
     console.log('Creating user:', body.email)
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
@@ -126,6 +148,7 @@ Deno.serve(async (req) => {
       email_confirm: true, // Auto-confirm the email
       user_metadata: {
         display_name: body.display_name,
+        organisation_id: resolvedOrgId,
       }
     })
 
@@ -149,6 +172,26 @@ Deno.serve(async (req) => {
     if (!newUser.user) {
       return new Response(
         JSON.stringify({ error: 'User creation returned no user' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Ensure the new user's profile has the same organisation_id
+    const { error: profileUpsertError } = await adminClient
+      .from('profiles')
+      .upsert(
+        {
+          user_id: newUser.user.id,
+          display_name: body.display_name,
+          organisation_id: resolvedOrgId,
+        },
+        { onConflict: 'user_id' },
+      )
+
+    if (profileUpsertError) {
+      console.error('Profile update failed:', profileUpsertError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to assign organisation to new user' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

@@ -109,39 +109,41 @@ export function useUserRole() {
   };
 }
 
-export function useUserRolesManagement() {
+export function useUserRolesManagement(organisationId?: string) {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchUsersWithRoles = async () => {
     setLoading(true);
     try {
-      // First get all user roles
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('id, user_id, role, created_at');
+      // Fetch profiles filtered by organisation (if provided)
+      let profilesQuery = supabase
+        .from('profiles')
+        .select('user_id, display_name, organisation_id');
+      if (organisationId) {
+        profilesQuery = profilesQuery.eq('organisation_id', organisationId);
+      }
 
-      if (rolesError) throw rolesError;
+      const { data: profilesData, error: profilesError } = await profilesQuery;
+      if (profilesError) throw profilesError;
 
-      // Then get profiles for those users
-      const userIds = rolesData?.map(r => r.user_id) || [];
-      
+      const userIds = profilesData?.map((p) => p.user_id) || [];
       if (userIds.length === 0) {
         setUsers([]);
         setLoading(false);
         return;
       }
 
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('user_id, display_name')
+      // Fetch roles for these users only
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('id, user_id, role, created_at')
         .in('user_id', userIds);
 
-      if (profilesError) throw profilesError;
+      if (rolesError) throw rolesError;
 
-      // Combine the data
-      const usersWithRoles: UserWithRole[] = rolesData.map(role => {
-        const profile = profilesData?.find(p => p.user_id === role.user_id);
+      const usersWithRoles: UserWithRole[] = rolesData.map((role) => {
+        const profile = profilesData?.find((p) => p.user_id === role.user_id);
         return {
           id: role.id,
           user_id: role.user_id,
@@ -196,7 +198,7 @@ export function useUserRolesManagement() {
 
   useEffect(() => {
     fetchUsersWithRoles();
-  }, []);
+  }, [organisationId]);
 
   return {
     users,
