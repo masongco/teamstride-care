@@ -274,6 +274,94 @@ export function useSupabaseEmployees(
     },
   });
 
+  // Update certification mutation
+  const updateCertificationMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<EmployeeCertificationDB> }) => {
+      const { data: beforeState } = await supabase
+        .from('employee_certifications')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      const { data, error } = await supabase
+        .from('employee_certifications')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { certification: data as EmployeeCertificationDB, beforeState };
+    },
+    onSuccess: async ({ certification, beforeState }) => {
+      queryClient.invalidateQueries({ queryKey: ['employee-certifications', orgId] });
+
+      await auditService.logCertificationAction(
+        'update',
+        certification.id,
+        orgId,
+        beforeState as unknown as Record<string, unknown>,
+        certification as unknown as Record<string, unknown>
+      );
+
+      toast({
+        title: 'Certification Updated',
+        description: `${certification.name} has been updated.`,
+      });
+    },
+    onError: (error) => {
+      console.error('[useSupabaseEmployees] Update certification failed:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update certification. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Delete certification mutation
+  const deleteCertificationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data: beforeState } = await supabase
+        .from('employee_certifications')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      const { error } = await supabase
+        .from('employee_certifications')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return beforeState as EmployeeCertificationDB;
+    },
+    onSuccess: async (beforeState) => {
+      queryClient.invalidateQueries({ queryKey: ['employee-certifications', orgId] });
+
+      await auditService.logCertificationAction(
+        'delete',
+        beforeState.id,
+        orgId,
+        beforeState as unknown as Record<string, unknown>,
+        undefined
+      );
+
+      toast({
+        title: 'Certification Deleted',
+        description: `${beforeState.name} has been removed.`,
+      });
+    },
+    onError: (error) => {
+      console.error('[useSupabaseEmployees] Delete certification failed:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete certification. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   // One-time migration from localStorage
   const migrateFromLocalStorage = useCallback(async () => {
     if (!orgId) return;
@@ -394,6 +482,9 @@ export function useSupabaseEmployees(
     changeStatus: (id: string, status: EmployeeDB['status']) =>
       changeStatusMutation.mutateAsync({ id, status }),
     addCertification: addCertificationMutation.mutateAsync,
+    updateCertification: (id: string, updates: Partial<EmployeeCertificationDB>) =>
+      updateCertificationMutation.mutateAsync({ id, updates }),
+    deleteCertification: (id: string) => deleteCertificationMutation.mutateAsync(id),
     refetch,
     
     // Mutation states

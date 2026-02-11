@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Plus,
@@ -42,13 +42,15 @@ import { Link } from 'react-router-dom';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
+import { supabase } from '@/integrations/supabase/client';
 import type {
   EmployeeDB,
   EmploymentTypeDB,
   EmployeeStatusDB,
   ComplianceStatusDB,
+  EmployeeCertificationDB,
 } from '@/types/database';
-import type { Employee } from '@/types/hrms';
+import type { Employee, Certification, Document } from '@/types/hrms';
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
   casual: 'Casual',
@@ -64,8 +66,59 @@ const employmentTypeColors: Record<EmploymentType, string> = {
   contractor: 'bg-warning/10 text-warning',
 };
 
+function dbCertToLegacyCertification(cert: EmployeeCertificationDB): Certification {
+  return {
+    id: cert.id,
+    name: cert.name,
+    type: cert.type as Certification['type'],
+    issueDate: cert.issue_date || '',
+    expiryDate: cert.expiry_date || '',
+    status: cert.status as ComplianceStatus,
+    documentId: cert.document_id || undefined,
+  };
+}
+
+function dbCertToDocument(cert: EmployeeCertificationDB): Document | null {
+  if (!cert.document_id) return null;
+  const nameFromPath = cert.document_id.split('/').pop() || cert.name || 'Document';
+  return {
+    id: cert.document_id,
+    name: nameFromPath,
+    type: 'certificate',
+    uploadedAt: cert.issue_date || cert.created_at,
+    url: cert.document_id,
+  };
+}
+
+type EmployeeDocumentRow = {
+  id: string;
+  user_id: string;
+  file_name: string;
+  file_url: string;
+  created_at: string;
+};
+
+function dbEmployeeDocToDocument(doc: EmployeeDocumentRow): Document {
+  return {
+    id: doc.id,
+    name: doc.file_name,
+    type: 'other',
+    uploadedAt: doc.created_at,
+    url: doc.file_url,
+  };
+}
+
 // Transform database employee to legacy Employee type for compatibility with existing components
-function dbToLegacyEmployee(emp: EmployeeDB): Employee {
+function dbToLegacyEmployee(
+  emp: EmployeeDB,
+  certs: EmployeeCertificationDB[],
+  employeeDocs: Document[]
+): Employee {
+  const certDocs = certs.map(dbCertToDocument).filter((doc): doc is Document => Boolean(doc));
+  const mergedDocs = [...certDocs, ...employeeDocs].filter((doc, index, arr) => {
+    return arr.findIndex((d) => d.id === doc.id) === index;
+  });
+
   return {
     id: emp.id,
     firstName: emp.first_name,
@@ -88,8 +141,8 @@ function dbToLegacyEmployee(emp: EmployeeDB): Employee {
           relationship: emp.emergency_contact_relationship || '',
         }
       : undefined,
-    documents: [],
-    certifications: [],
+    documents: mergedDocs,
+    certifications: certs.map(dbCertToLegacyCertification),
   };
 }
 
@@ -203,11 +256,16 @@ export default function Employees() {
 
   const {
     employees: dbEmployees,
+    certifications: dbCertifications,
+    getCertificationsForEmployee,
     isLoading,
     error,
     createEmployee,
     updateEmployee,
     changeStatus,
+    addCertification,
+    updateCertification,
+    deleteCertification,
     organisationId,
     isCreating,
   } = useSupabaseEmployees();
@@ -219,8 +277,54 @@ export default function Employees() {
   const canCreateEmployee =
     canManageEmployees && (Boolean(organisationId) || isPlatformUser);
 
+  const [employeeDocsMap, setEmployeeDocsMap] = useState<Record<string, Document[]>>({});
+
+  const fetchEmployeeDocuments = async (employeeIds: string[]) => {
+    if (employeeIds.length === 0) {
+      setEmployeeDocsMap({});
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('employee_documents')
+      .select('id,user_id,file_name,file_url,created_at')
+      .in('user_id', employeeIds);
+
+    if (error) {
+      console.error('Failed to load employee documents:', error);
+      return;
+    }
+
+    const map: Record<string, Document[]> = {};
+    (data || []).forEach((row: EmployeeDocumentRow) => {
+      if (!map[row.user_id]) map[row.user_id] = [];
+      map[row.user_id].push(dbEmployeeDocToDocument(row));
+    });
+
+    setEmployeeDocsMap(map);
+  };
+
+  useEffect(() => {
+    const ids = dbEmployees.map((e) => e.id);
+    fetchEmployeeDocuments(ids);
+  }, [dbEmployees]);
+
   // Convert DB employees to legacy format for UI compatibility
-  const employees = useMemo(() => dbEmployees.map(dbToLegacyEmployee), [dbEmployees]);
+  const employees = useMemo(
+    () =>
+      dbEmployees.map((emp) =>
+        dbToLegacyEmployee(emp, getCertificationsForEmployee(emp.id), employeeDocsMap[emp.id] || [])
+      ),
+    [dbEmployees, getCertificationsForEmployee, employeeDocsMap]
+  );
+
+  useEffect(() => {
+    if (!selectedEmployee) return;
+    const refreshed = employees.find((emp) => emp.id === selectedEmployee.id);
+    if (refreshed && refreshed !== selectedEmployee) {
+      setSelectedEmployee(refreshed);
+    }
+  }, [employees, selectedEmployee]);
 
   const filteredEmployees = useMemo(() => {
     const filtered = employees.filter((employee) => {
@@ -326,6 +430,170 @@ export default function Employees() {
       console.error('Failed to change status:', err);
       toast({
         title: 'Action blocked',
+        description: friendlySupabaseError(err),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const uploadCertificationDocument = async (employeeId: string, file: File) => {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `certifications/${employeeId}/${Date.now()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('employee-documents')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from('employee-documents').getPublicUrl(filePath);
+    return data.publicUrl;
+  };
+
+  const getDefaultDocumentTypeId = async () => {
+    const { data, error } = await supabase
+      .from('document_types')
+      .select('id,name')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true })
+      .limit(1);
+
+    if (error) throw error;
+    const row = data?.[0];
+    if (!row) throw new Error('No active document types found.');
+    return row.id;
+  };
+
+  const handleUploadEmployeeDocument = async (employee: Employee, file: File) => {
+    if (!canManageEmployees) {
+      toast({
+        title: 'Access restricted',
+        description: accessDeniedMessage('employee documents'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `employees/${employee.id}/documents/${Date.now()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('employee-documents')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from('employee-documents').getPublicUrl(filePath);
+    const fileUrl = data.publicUrl;
+
+    const documentTypeId = await getDefaultDocumentTypeId();
+
+    const { error: insertError } = await supabase
+      .from('employee_documents')
+      .insert({
+        user_id: employee.id,
+        document_type_id: documentTypeId,
+        file_url: fileUrl,
+        file_name: file.name,
+        status: 'pending',
+      });
+
+    if (insertError) throw insertError;
+
+    await fetchEmployeeDocuments([employee.id]);
+  };
+
+  const handleSaveCertification = async (
+    employee: Employee,
+    certification: Certification,
+    documentFile: File | undefined,
+    overallStatus: ComplianceStatus
+  ) => {
+    if (!canManageEmployees) {
+      toast({
+        title: 'Access restricted',
+        description: accessDeniedMessage('employee certifications'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!isPlatformUser && !organisationId) {
+      toast({
+        title: 'No organisation',
+        description: 'Create or join an organisation before updating certifications.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      let documentUrl = certification.documentId || undefined;
+
+      if (documentFile) {
+        documentUrl = await uploadCertificationDocument(employee.id, documentFile);
+      }
+
+      const existing = dbCertifications.find((c) => c.id === certification.id);
+
+      if (existing) {
+        await updateCertification(existing.id, {
+          name: certification.name,
+          type: certification.type,
+          issue_date: certification.issueDate || null,
+          expiry_date: certification.expiryDate || null,
+          status: certification.status as ComplianceStatusDB,
+          document_id: documentUrl || null,
+        });
+      } else {
+        await addCertification({
+          organisation_id: organisationId!,
+          employee_id: employee.id,
+          name: certification.name,
+          type: certification.type,
+          issue_date: certification.issueDate || undefined,
+          expiry_date: certification.expiryDate || undefined,
+          status: certification.status as ComplianceStatusDB,
+          document_id: documentUrl,
+        });
+      }
+
+      await updateEmployee(employee.id, {
+        compliance_status: overallStatus as ComplianceStatusDB,
+      });
+    } catch (err: any) {
+      console.error('Failed to save certification:', err);
+      toast({
+        title: 'Save failed',
+        description: friendlySupabaseError(err),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteCertification = async (
+    employee: Employee,
+    certificationId: string,
+    overallStatus: ComplianceStatus
+  ) => {
+    if (!canManageEmployees) {
+      toast({
+        title: 'Access restricted',
+        description: accessDeniedMessage('employee certifications'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await deleteCertification(certificationId);
+      await updateEmployee(employee.id, {
+        compliance_status: overallStatus as ComplianceStatusDB,
+      });
+    } catch (err: any) {
+      console.error('Failed to delete certification:', err);
+      toast({
+        title: 'Delete failed',
         description: friendlySupabaseError(err),
         variant: 'destructive',
       });
@@ -830,10 +1098,12 @@ export default function Employees() {
                       {/* Hide edit actions if user cannot manage employees */}
                       {canManageEmployees ? (
                         <>
-                          <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                            Edit Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewProfile(employee);
+                            }}
+                          >
                             View Documents
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -997,10 +1267,12 @@ export default function Employees() {
 
                         {canManageEmployees ? (
                           <>
-                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                              Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewProfile(employee);
+                              }}
+                            >
                               View Documents
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -1055,6 +1327,21 @@ export default function Employees() {
         open={detailSheetOpen}
         onOpenChange={setDetailSheetOpen}
         onUpdate={handleUpdateEmployee}
+        onSaveCertification={(certification, documentFile, overallStatus) => {
+          if (selectedEmployee) {
+            return handleSaveCertification(selectedEmployee, certification, documentFile, overallStatus);
+          }
+        }}
+        onDeleteCertification={(certificationId, overallStatus) => {
+          if (selectedEmployee) {
+            return handleDeleteCertification(selectedEmployee, certificationId, overallStatus);
+          }
+        }}
+        onUploadDocument={(file) => {
+          if (selectedEmployee) {
+            return handleUploadEmployeeDocument(selectedEmployee, file);
+          }
+        }}
       />
     </div>
   );

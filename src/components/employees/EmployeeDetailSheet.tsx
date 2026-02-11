@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Employee, EmploymentType, Document, Certification, ComplianceStatus } from '@/types/hrms';
-import { format, differenceInDays } from 'date-fns';
+import { format, differenceInDays, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { CertificationDialog } from './CertificationDialog';
@@ -34,6 +34,16 @@ interface EmployeeDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate?: (updatedEmployee: Employee) => void;
+  onSaveCertification?: (
+    certification: Certification,
+    documentFile: File | undefined,
+    overallStatus: ComplianceStatus
+  ) => void | Promise<void>;
+  onDeleteCertification?: (
+    certificationId: string,
+    overallStatus: ComplianceStatus
+  ) => void | Promise<void>;
+  onUploadDocument?: (file: File) => void | Promise<void>;
 }
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
@@ -50,7 +60,15 @@ const employmentTypeColors: Record<EmploymentType, string> = {
   contractor: 'bg-warning/10 text-warning',
 };
 
-export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: EmployeeDetailSheetProps) {
+export function EmployeeDetailSheet({
+  employee,
+  open,
+  onOpenChange,
+  onUpdate,
+  onSaveCertification,
+  onDeleteCertification,
+  onUploadDocument,
+}: EmployeeDetailSheetProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Employee>>({});
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
@@ -61,8 +79,16 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
   if (!employee) return null;
 
   // Helper functions for certification management
-  const getExpiryInfo = (expiryDate: string) => {
+  const formatDateOrDash = (value?: string | null) => {
+    if (!value) return 'Not set';
+    const parsed = new Date(value);
+    return isValid(parsed) ? format(parsed, 'MMM d, yyyy') : 'Not set';
+  };
+
+  const getExpiryInfo = (expiryDate?: string | null) => {
+    if (!expiryDate) return { daysUntil: null, expiry: null };
     const expiry = new Date(expiryDate);
+    if (!isValid(expiry)) return { daysUntil: null, expiry: null };
     const today = new Date();
     const daysUntil = differenceInDays(expiry, today);
     return { daysUntil, expiry };
@@ -91,7 +117,7 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
     setCertDialogOpen(true);
   };
 
-  const handleSaveCertification = (certification: Certification, documentFile?: File) => {
+  const handleSaveCertification = async (certification: Certification, documentFile?: File) => {
     let newDocuments = [...employee.documents];
     
     // If a document file was provided, add it to the documents list
@@ -128,6 +154,11 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
     else if (hasExpiring) overallStatus = 'expiring';
     else if (hasPending) overallStatus = 'pending';
 
+    if (onSaveCertification) {
+      await onSaveCertification(certification, documentFile, overallStatus);
+      return;
+    }
+
     const updatedEmployee: Employee = {
       ...employee,
       certifications: newCertifications,
@@ -136,14 +167,14 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
     };
 
     onUpdate?.(updatedEmployee);
-    
+
     toast({
       title: existingIndex >= 0 ? 'Certification Updated' : 'Certification Added',
       description: `${certification.name} has been ${existingIndex >= 0 ? 'updated' : 'added'} successfully.`,
     });
   };
 
-  const handleDeleteCertification = (certificationId: string) => {
+  const handleDeleteCertification = async (certificationId: string) => {
     const newCertifications = employee.certifications.filter(c => c.id !== certificationId);
     
     // Recalculate overall compliance status
@@ -156,21 +187,28 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
     else if (hasExpiring) overallStatus = 'expiring';
     else if (hasPending) overallStatus = 'pending';
 
+    const finalStatus = newCertifications.length === 0 ? 'pending' : overallStatus;
+
+    if (onDeleteCertification) {
+      await onDeleteCertification(certificationId, finalStatus);
+      return;
+    }
+
     const updatedEmployee: Employee = {
       ...employee,
       certifications: newCertifications,
-      complianceStatus: newCertifications.length === 0 ? 'pending' : overallStatus,
+      complianceStatus: finalStatus,
     };
 
     onUpdate?.(updatedEmployee);
-    
+
     toast({
       title: 'Certification Removed',
       description: 'The certification has been removed.',
     });
   };
 
-  const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -198,13 +236,35 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
 
     setIsUploadingDocument(true);
 
-    // Create a new document entry (in a real app, this would upload to storage)
+    if (onUploadDocument) {
+      try {
+        await onUploadDocument(file);
+        toast({
+          title: 'Document Uploaded',
+          description: `${file.name} has been uploaded successfully.`,
+        });
+      } catch (err: any) {
+        toast({
+          title: 'Upload failed',
+          description: err?.message || 'Unable to upload document.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsUploadingDocument(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+      return;
+    }
+
+    // Fallback to local-only behavior
     const newDocument: Document = {
       id: `doc-${Date.now()}`,
       name: file.name,
       type: 'certificate',
       uploadedAt: new Date().toISOString(),
-      url: URL.createObjectURL(file), // Temporary URL for demo
+      url: URL.createObjectURL(file),
     };
 
     const updatedEmployee: Employee = {
@@ -220,7 +280,6 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
       description: `${file.name} has been uploaded successfully.`,
     });
 
-    // Reset the file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -235,21 +294,24 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
   const validCerts = employee.certifications.filter(c => c.status === 'compliant').length;
   const compliancePercentage = totalCerts > 0 ? Math.round((validCerts / totalCerts) * 100) : 0;
 
+  const buildEditData = (emp: Employee): Partial<Employee> => ({
+    firstName: emp.firstName,
+    lastName: emp.lastName,
+    email: emp.email,
+    phone: emp.phone,
+    position: emp.position,
+    department: emp.department,
+    employmentType: emp.employmentType,
+    payRate: emp.payRate,
+    awardClassification: emp.awardClassification,
+    emergencyContact: emp.emergencyContact,
+  });
+
   const handleStartEdit = () => {
-    setEditData({
-      firstName: employee.firstName,
-      lastName: employee.lastName,
-      email: employee.email,
-      phone: employee.phone,
-      position: employee.position,
-      department: employee.department,
-      employmentType: employee.employmentType,
-      payRate: employee.payRate,
-      awardClassification: employee.awardClassification,
-      emergencyContact: employee.emergencyContact,
-    });
+    setEditData(buildEditData(employee));
     setIsEditing(true);
   };
+
 
   const handleCancelEdit = () => {
     setIsEditing(false);
@@ -466,7 +528,7 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
                   </div>
                   <div>
                     <p className="text-muted-foreground">Start Date</p>
-                    <p className="font-medium">{format(new Date(employee.startDate), 'MMM d, yyyy')}</p>
+                    <p className="font-medium">{formatDateOrDash(employee.startDate)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Pay Rate</p>
@@ -614,6 +676,8 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                       {cert.status === 'pending' ? (
                                         'Awaiting documentation'
+                                      ) : !expiry ? (
+                                        'Expiry date not set'
                                       ) : cert.status === 'expired' ? (
                                         `Expired ${format(expiry, 'MMM d, yyyy')}`
                                       ) : (
@@ -685,13 +749,27 @@ export function EmployeeDetailSheet({ employee, open, onOpenChange, onUpdate }: 
                     <div className="space-y-2">
                       {employee.documents.map((doc) => (
                         <div key={doc.id} className="flex items-center justify-between text-sm p-2 rounded-lg bg-muted/50">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <FileText className="h-4 w-4 text-muted-foreground" />
-                            <span>{doc.name}</span>
+                            <span className="truncate">{doc.name}</span>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(doc.uploadedAt), 'MMM d, yyyy')}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateOrDash(doc.uploadedAt)}
+                            </span>
+                            {doc.url && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(doc.url, '_blank', 'noopener,noreferrer');
+                                }}
+                              >
+                                View
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
