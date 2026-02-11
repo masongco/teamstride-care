@@ -79,16 +79,12 @@ function dbCertToLegacyCertification(cert: EmployeeCertificationDB): Certificati
   };
 }
 
-function dbCertToDocument(cert: EmployeeCertificationDB): Document | null {
+function dbCertToDocument(
+  cert: EmployeeCertificationDB,
+  employeeDocs: Document[]
+): Document | null {
   if (!cert.document_id) return null;
-  const nameFromPath = cert.document_id.split('/').pop() || cert.name || 'Document';
-  return {
-    id: cert.document_id,
-    name: nameFromPath,
-    type: 'certificate',
-    uploadedAt: cert.issue_date || cert.created_at,
-    url: cert.document_id,
-  };
+  return employeeDocs.find((doc) => doc.id === cert.document_id) ?? null;
 }
 
 function deriveComplianceStatus(certs: EmployeeCertificationDB[]): ComplianceStatus {
@@ -124,7 +120,9 @@ function dbToLegacyEmployee(
   certs: EmployeeCertificationDB[],
   employeeDocs: Document[]
 ): Employee {
-  const certDocs = certs.map(dbCertToDocument).filter((doc): doc is Document => Boolean(doc));
+  const certDocs = certs
+    .map((cert) => dbCertToDocument(cert, employeeDocs))
+    .filter((doc): doc is Document => Boolean(doc));
   const mergedDocs = [...certDocs, ...employeeDocs].filter((doc, index, arr) => {
     return arr.findIndex((d) => d.id === doc.id) === index;
   });
@@ -460,7 +458,12 @@ export default function Employees() {
     }
   };
 
-  const uploadCertificationDocument = async (employeeId: string, file: File) => {
+  const uploadCertificationDocument = async (
+    employeeId: string,
+    file: File,
+    issueDate?: string,
+    expiryDate?: string
+  ) => {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const filePath = `certifications/${employeeId}/${Date.now()}-${safeName}`;
 
@@ -471,7 +474,34 @@ export default function Employees() {
     if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from('employee-documents').getPublicUrl(filePath);
-    return data.publicUrl;
+    const fileUrl = data.publicUrl;
+
+    const documentTypeId = await getDefaultDocumentTypeId();
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('employee_documents')
+      .insert({
+        user_id: employeeId,
+        document_type_id: documentTypeId,
+        file_url: fileUrl,
+        file_name: file.name,
+        status: 'pending',
+        issue_date: issueDate || null,
+        expiry_date: expiryDate || null,
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      const message = insertError.message?.includes('row-level security')
+        ? 'Upload blocked by permissions. An admin policy is required to upload for other employees.'
+        : insertError.message;
+      throw new Error(message);
+    }
+
+    await fetchEmployeeDocuments([employeeId]);
+
+    return inserted.id;
   };
 
   const getDefaultDocumentTypeId = async () => {
@@ -557,10 +587,15 @@ export default function Employees() {
     }
 
     try {
-      let documentUrl = certification.documentId || undefined;
+      let documentId = certification.documentId || undefined;
 
       if (documentFile) {
-        documentUrl = await uploadCertificationDocument(employee.id, documentFile);
+        documentId = await uploadCertificationDocument(
+          employee.id,
+          documentFile,
+          certification.issueDate,
+          certification.expiryDate
+        );
       }
 
       const existing = dbCertifications.find((c) => c.id === certification.id);
@@ -572,7 +607,7 @@ export default function Employees() {
           issue_date: certification.issueDate || null,
           expiry_date: certification.expiryDate || null,
           status: certification.status as ComplianceStatusDB,
-          document_id: documentUrl || null,
+          document_id: documentId || null,
         });
       } else {
         await addCertification({
@@ -583,7 +618,7 @@ export default function Employees() {
           issue_date: certification.issueDate || undefined,
           expiry_date: certification.expiryDate || undefined,
           status: certification.status as ComplianceStatusDB,
-          document_id: documentUrl,
+          document_id: documentId,
         });
       }
 
