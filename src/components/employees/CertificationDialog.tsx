@@ -20,13 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { toast } from '@/hooks/use-toast';
 import { Certification, ComplianceStatus } from '@/types/hrms';
 
@@ -98,6 +94,29 @@ export function CertificationDialog({
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [issueDateInput, setIssueDateInput] = useState(
+    formData.issueDate ? format(formData.issueDate, 'dd/MM/yyyy') : ''
+  );
+  const [expiryDateInput, setExpiryDateInput] = useState(
+    formData.expiryDate ? format(formData.expiryDate, 'dd/MM/yyyy') : ''
+  );
+
+  const parseAuDate = (value: string): Date | undefined => {
+    const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return undefined;
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const parsed = new Date(year, month - 1, day);
+    if (
+      parsed.getFullYear() !== year ||
+      parsed.getMonth() !== month - 1 ||
+      parsed.getDate() !== day
+    ) {
+      return undefined;
+    }
+    return parsed;
+  };
 
   const handleTypeChange = (type: string) => {
     const certType = certificationTypes.find(t => t.value === type);
@@ -118,11 +137,18 @@ export function CertificationDialog({
       name: formData.name || autoName,
       expiryDate: newExpiryDate,
     });
+
+    if (newExpiryDate) {
+      setExpiryDateInput(format(newExpiryDate, 'dd/MM/yyyy'));
+    } else {
+      setExpiryDateInput('');
+    }
   };
 
   const handleIssueDateChange = (date: Date | undefined) => {
     if (!date) {
       setFormData({ ...formData, issueDate: undefined });
+      setIssueDateInput('');
       return;
     }
     
@@ -136,6 +162,44 @@ export function CertificationDialog({
       issueDate: date,
       expiryDate: newExpiryDate,
     });
+    setIssueDateInput(format(date, 'dd/MM/yyyy'));
+    if (newExpiryDate) {
+      setExpiryDateInput(format(newExpiryDate, 'dd/MM/yyyy'));
+    }
+  };
+
+  const handleIssueDateInputChange = (value: string) => {
+    setIssueDateInput(value);
+    if (errors.issueDate) {
+      setErrors({ ...errors, issueDate: '' });
+    }
+    if (!value.trim()) {
+      setFormData({ ...formData, issueDate: undefined });
+      return;
+    }
+    const parsed = parseAuDate(value);
+    if (parsed) {
+      handleIssueDateChange(parsed);
+    } else if (value.length >= 10) {
+      setErrors({ ...errors, issueDate: 'Use DD/MM/YYYY' });
+    }
+  };
+
+  const handleExpiryDateInputChange = (value: string) => {
+    setExpiryDateInput(value);
+    if (errors.expiryDate) {
+      setErrors({ ...errors, expiryDate: '' });
+    }
+    if (!value.trim()) {
+      setFormData({ ...formData, expiryDate: undefined });
+      return;
+    }
+    const parsed = parseAuDate(value);
+    if (parsed) {
+      setFormData({ ...formData, expiryDate: parsed });
+    } else if (value.length >= 10) {
+      setErrors({ ...errors, expiryDate: 'Use DD/MM/YYYY' });
+    }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -270,61 +334,72 @@ export function CertificationDialog({
           {/* Issue Date */}
           <div className="space-y-2">
             <Label>Issue Date *</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !formData.issueDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formData.issueDate ? format(formData.issueDate, "PPP") : "Select issue date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={formData.issueDate}
-                  onSelect={handleIssueDateChange}
-                  disabled={(date) => date > new Date()}
-                  initialFocus
-                  className={cn("p-3 pointer-events-auto")}
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="flex gap-2">
+              <Input
+                value={issueDateInput}
+                onChange={(e) => handleIssueDateInputChange(e.target.value)}
+                placeholder="DD/MM/YYYY"
+                inputMode="numeric"
+              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="icon" aria-label="Pick issue date">
+                    <CalendarIcon className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={formData.issueDate}
+                    onSelect={handleIssueDateChange}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
             {errors.issueDate && <p className="text-xs text-destructive">{errors.issueDate}</p>}
+            {!errors.issueDate && (
+              <p className="text-xs text-muted-foreground">Format: DD/MM/YYYY</p>
+            )}
           </div>
 
           {/* Expiry Date */}
           <div className="space-y-2">
             <Label>Expiry Date *</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !formData.expiryDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formData.expiryDate ? format(formData.expiryDate, "PPP") : "Select expiry date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={formData.expiryDate}
-                  onSelect={(date) => setFormData({ ...formData, expiryDate: date })}
-                  disabled={(date) => formData.issueDate ? date <= formData.issueDate : false}
-                  initialFocus
-                  className={cn("p-3 pointer-events-auto")}
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="flex gap-2">
+              <Input
+                value={expiryDateInput}
+                onChange={(e) => handleExpiryDateInputChange(e.target.value)}
+                placeholder="DD/MM/YYYY"
+                inputMode="numeric"
+              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="icon" aria-label="Pick expiry date">
+                    <CalendarIcon className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={formData.expiryDate}
+                    onSelect={(date) => {
+                      setFormData({ ...formData, expiryDate: date });
+                      if (date) setExpiryDateInput(format(date, 'dd/MM/yyyy'));
+                    }}
+                    disabled={(date) => formData.issueDate ? date <= formData.issueDate : false}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
             {errors.expiryDate && <p className="text-xs text-destructive">{errors.expiryDate}</p>}
+            {!errors.expiryDate && (
+              <p className="text-xs text-muted-foreground">Format: DD/MM/YYYY</p>
+            )}
             
             {/* Status Preview */}
             {previewStatus && (
