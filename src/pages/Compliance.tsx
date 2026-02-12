@@ -30,10 +30,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
+import { useComplianceRules } from '@/hooks/useDocuments';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { ComplianceStatus } from '@/types/hrms';
+import type { ComplianceRule } from '@/types/portal';
 import type { EmployeeDB, EmployeeCertificationDB, ComplianceStatusDB } from '@/types/database';
 
 const certTypeLabels: Record<string, string> = {
@@ -71,7 +73,7 @@ export default function Compliance() {
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterCertType, setFilterCertType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [activeView, setActiveView] = useState<'certifications' | 'employees'>('certifications');
+  const [activeView, setActiveView] = useState<'certifications' | 'employees' | 'requirements'>('certifications');
 
   // Use Supabase data exclusively - no localStorage fallback
   const { 
@@ -81,6 +83,7 @@ export default function Compliance() {
     isLoading, 
     error 
   } = useSupabaseEmployees();
+  const { rules: complianceRules, loading: complianceRulesLoading } = useComplianceRules();
 
   // Combine employees with their certifications and filter out inactive
   const activeEmployees = useMemo(() => {
@@ -189,6 +192,15 @@ export default function Compliance() {
     [activeEmployees, searchQuery, filterDepartment, filterStatus]
   );
 
+  const filteredRequirements = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return complianceRules;
+    return complianceRules.filter((rule) => {
+      const docName = rule.document_type?.name?.toLowerCase() || '';
+      return docName.includes(query);
+    });
+  }, [complianceRules, searchQuery]);
+
   // Export functionality
   const handleExportCSV = () => {
     const headers = ['Employee', 'Department', 'Certification', 'Type', 'Issue Date', 'Expiry Date', 'Status', 'Days Remaining'];
@@ -268,12 +280,16 @@ export default function Compliance() {
 
   const clearFilters = () => {
     setSearchQuery('');
-    setFilterDepartment('all');
-    setFilterCertType('all');
-    setFilterStatus('all');
+    if (activeView !== 'requirements') {
+      setFilterDepartment('all');
+      setFilterCertType('all');
+      setFilterStatus('all');
+    }
   };
 
-  const hasActiveFilters = searchQuery || filterDepartment !== 'all' || filterCertType !== 'all' || filterStatus !== 'all';
+  const hasActiveFilters = activeView === 'requirements'
+    ? Boolean(searchQuery)
+    : Boolean(searchQuery) || filterDepartment !== 'all' || filterCertType !== 'all' || filterStatus !== 'all';
 
   // Show loading state
   if (isLoading) {
@@ -502,50 +518,58 @@ export default function Compliance() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Search by employee or certification..."
+                  placeholder={
+                    activeView === 'requirements'
+                      ? 'Search requirements by document name...'
+                      : 'Search by employee or certification...'
+                  }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
               </div>
-              <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept} value={dept}>
-                      {dept}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterCertType} onValueChange={setFilterCertType}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Certification Type" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  <SelectItem value="all">All Types</SelectItem>
-                  {certTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {certTypeLabels[type] || type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="compliant">Compliant</SelectItem>
-                  <SelectItem value="expiring">Expiring</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                </SelectContent>
-              </Select>
+              {activeView !== 'requirements' && (
+                <>
+                  <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder="Department" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept} value={dept}>
+                          {dept}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterCertType} onValueChange={setFilterCertType}>
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder="Certification Type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="all">All Types</SelectItem>
+                      {certTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {certTypeLabels[type] || type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-full sm:w-40">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="compliant">Compliant</SelectItem>
+                      <SelectItem value="expiring">Expiring</SelectItem>
+                      <SelectItem value="expired">Expired</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
             </div>
             
             {hasActiveFilters && (
@@ -557,19 +581,19 @@ export default function Compliance() {
                     <X className="h-3 w-3 cursor-pointer" onClick={() => setSearchQuery('')} />
                   </Badge>
                 )}
-                {filterDepartment !== 'all' && (
+                {activeView !== 'requirements' && filterDepartment !== 'all' && (
                   <Badge variant="secondary" className="gap-1">
                     {filterDepartment}
                     <X className="h-3 w-3 cursor-pointer" onClick={() => setFilterDepartment('all')} />
                   </Badge>
                 )}
-                {filterCertType !== 'all' && (
+                {activeView !== 'requirements' && filterCertType !== 'all' && (
                   <Badge variant="secondary" className="gap-1">
                     {certTypeLabels[filterCertType] || filterCertType}
                     <X className="h-3 w-3 cursor-pointer" onClick={() => setFilterCertType('all')} />
                   </Badge>
                 )}
-                {filterStatus !== 'all' && (
+                {activeView !== 'requirements' && filterStatus !== 'all' && (
                   <Badge variant="secondary" className="gap-1 capitalize">
                     {filterStatus}
                     <X className="h-3 w-3 cursor-pointer" onClick={() => setFilterStatus('all')} />
@@ -589,7 +613,7 @@ export default function Compliance() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <CardTitle className="text-lg">Compliance Details</CardTitle>
-            <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'certifications' | 'employees')}>
+            <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'certifications' | 'employees' | 'requirements')}>
               <TabsList>
                 <TabsTrigger value="certifications" className="gap-2">
                   <FileCheck className="h-4 w-4" />
@@ -599,6 +623,10 @@ export default function Compliance() {
                   <Users className="h-4 w-4" />
                   Employees ({filteredEmployees.length})
                 </TabsTrigger>
+                <TabsTrigger value="requirements" className="gap-2">
+                  <FileCheck className="h-4 w-4" />
+                  Requirements ({filteredRequirements.length})
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -606,8 +634,10 @@ export default function Compliance() {
         <CardContent>
           {activeView === 'certifications' ? (
             <CertificationsTable certifications={filteredCertifications} />
-          ) : (
+          ) : activeView === 'employees' ? (
             <EmployeesComplianceTable employees={filteredEmployees} />
+          ) : (
+            <RequirementsTable requirements={filteredRequirements} loading={complianceRulesLoading} />
           )}
         </CardContent>
       </Card>
@@ -806,6 +836,73 @@ function EmployeesComplianceTable({ employees }: { employees: EmployeeWithCerts[
                 </TableRow>
               );
             })
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function getRequirementTargetLabel(rule: ComplianceRule) {
+  if (rule.target_type === 'all') return 'All roles';
+  if (rule.target_type === 'role') return rule.target_value || 'Role';
+  if (rule.target_type === 'department') return rule.target_value || 'Department';
+  if (rule.target_type === 'location') return rule.target_value || 'Location';
+  return rule.target_value || rule.target_type;
+}
+
+function RequirementsTable({
+  requirements,
+  loading,
+}: {
+  requirements: ComplianceRule[];
+  loading: boolean;
+}) {
+  return (
+    <div className="rounded-lg border overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/50">
+            <TableHead>Document Name</TableHead>
+            <TableHead>Category</TableHead>
+            <TableHead>Applies To</TableHead>
+            <TableHead>Required</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            <TableRow>
+              <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                Loading requirements...
+              </TableCell>
+            </TableRow>
+          ) : requirements.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                No compliance requirements found
+              </TableCell>
+            </TableRow>
+          ) : (
+            requirements.map((rule) => (
+              <TableRow key={rule.id} className="table-row-interactive">
+                <TableCell className="font-medium">
+                  {rule.document_type?.name || 'Unknown document'}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="text-xs">
+                    {rule.document_type?.category || 'Document'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {getRequirementTargetLabel(rule)}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={rule.is_required ? 'default' : 'secondary'}>
+                    {rule.is_required ? 'Required' : 'Optional'}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))
           )}
         </TableBody>
       </Table>

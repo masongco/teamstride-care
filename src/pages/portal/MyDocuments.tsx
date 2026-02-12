@@ -56,7 +56,7 @@ const STATUS_CONFIG: Record<DocumentStatus, { label: string; icon: React.Element
 
 export default function MyDocuments() {
   const { documents, loading, uploadDocument, replaceDocument, deleteDocument } = useEmployeeDocuments();
-  const { documentTypes, loading: typesLoading } = useDocumentTypes();
+  const { documentTypes, loading: typesLoading } = useDocumentTypes(undefined, { category: 'Compliance' });
   
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedTypeId, setSelectedTypeId] = useState('');

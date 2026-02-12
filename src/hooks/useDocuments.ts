@@ -10,7 +10,10 @@ import type {
   DocumentStatus 
 } from '@/types/portal';
 
-export function useDocumentTypes() {
+export function useDocumentTypes(
+  _organisationId?: string,
+  options?: { category?: string },
+) {
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -18,11 +21,16 @@ export function useDocumentTypes() {
   const fetchDocumentTypes = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('document_types')
         .select('*')
-        .eq('is_active', true)
-        .order('display_order', { ascending: true });
+        .eq('is_active', true);
+
+      if (options?.category) {
+        query = query.eq('category', options.category);
+      }
+
+      const { data, error } = await query.order('display_order', { ascending: true });
 
       if (error) throw error;
       setDocumentTypes(data || []);
@@ -35,7 +43,7 @@ export function useDocumentTypes() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, options?.category]);
 
   const createDocumentType = async (docType: Omit<DocumentType, 'id' | 'created_at' | 'updated_at'>) => {
     try {
@@ -426,7 +434,7 @@ export function useDocumentReviews(documentId?: string) {
   return { reviews, loading, fetchReviews };
 }
 
-export function useComplianceRules() {
+export function useComplianceRules(_organisationId?: string) {
   const [rules, setRules] = useState<ComplianceRule[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -465,7 +473,7 @@ export function useComplianceRules() {
 
       if (error) throw error;
       setRules(prev => [data, ...prev]);
-      toast({ title: 'Compliance rule created' });
+      toast({ title: 'Requirement created' });
       return data;
     } catch (error: any) {
       toast({
@@ -486,7 +494,7 @@ export function useComplianceRules() {
 
       if (error) throw error;
       setRules(prev => prev.filter(r => r.id !== id));
-      toast({ title: 'Compliance rule deleted' });
+      toast({ title: 'Requirement deleted' });
       return true;
     } catch (error: any) {
       toast({

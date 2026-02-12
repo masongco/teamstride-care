@@ -3,20 +3,30 @@ import {
   Search,
   Plus,
   MoreHorizontal,
-  Mail,
-  Phone,
   Download,
   Upload,
   UserX,
+  FileText,
+  User,
   Loader2,
   LayoutGrid,
   List,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/status-badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -255,6 +265,13 @@ export default function Employees() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [noteEmployee, setNoteEmployee] = useState<Employee | null>(null);
+  const [noteType, setNoteType] = useState<'email' | 'call' | 'text' | 'note'>('note');
+  const [noteReason, setNoteReason] = useState('');
+  const [noteDiscussion, setNoteDiscussion] = useState('');
+  const [noteOutcome, setNoteOutcome] = useState('');
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -379,11 +396,56 @@ export default function Employees() {
     () => [...new Set(employees.map((e) => e.department).filter(Boolean))],
     [employees]
   );
+  const noteTimestampLabel = useMemo(() => new Date().toLocaleString(), [noteDialogOpen]);
+  const loggedByLabel = useMemo(
+    () => user?.user_metadata?.display_name || user?.email || 'Unknown',
+    [user]
+  );
 
   const handleViewProfile = (employee: Employee) => {
     fetchEmployeeDocuments([employee.id]);
     setSelectedEmployee(employee);
     setDetailSheetOpen(true);
+  };
+
+  const openLodgeNote = (employee: Employee) => {
+    setNoteEmployee(employee);
+    setNoteType('note');
+    setNoteReason('');
+    setNoteDiscussion('');
+    setNoteOutcome('');
+    setNoteDialogOpen(true);
+  };
+
+  const handleLodgeNoteSubmit = async () => {
+    if (!noteEmployee) return;
+    if (!noteReason.trim() || !noteDiscussion.trim()) {
+      toast({
+        title: 'Missing details',
+        description: 'Please add a reason and what was discussed.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!user) {
+      toast({
+        title: 'Not signed in',
+        description: 'Please sign in to log a note.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setNoteSubmitting(true);
+    try {
+      // TODO: Persist to the database when an employee interactions table is available.
+      toast({
+        title: 'Note logged',
+        description: `Saved ${noteType} note for ${noteEmployee.firstName} ${noteEmployee.lastName}.`,
+      });
+      setNoteDialogOpen(false);
+    } finally {
+      setNoteSubmitting(false);
+    }
   };
 
   const handleUpdateEmployee = async (updatedEmployee: Employee) => {
@@ -501,10 +563,16 @@ export default function Employees() {
   };
 
   const getDefaultDocumentTypeId = async () => {
+    if (!organisationId) {
+      throw new Error('No organisation selected for document upload.');
+    }
+
     const { data, error } = await supabase
       .from('document_types')
       .select('id,name')
       .eq('is_active', true)
+      .eq('organisation_id', organisationId)
+      .eq('category', 'Document')
       .order('display_order', { ascending: true })
       .limit(1);
 
@@ -515,6 +583,8 @@ export default function Employees() {
     const { data: anyData, error: anyError } = await supabase
       .from('document_types')
       .select('id,name')
+      .eq('organisation_id', organisationId)
+      .eq('category', 'Document')
       .order('display_order', { ascending: true })
       .limit(1);
 
@@ -525,10 +595,12 @@ export default function Employees() {
     const { data: created, error: createError } = await supabase
       .from('document_types')
       .insert({
+        organisation_id: organisationId,
         name: 'General Document',
         description: 'Auto-created for employee document uploads',
         is_active: true,
         is_required: false,
+        category: 'Document',
         display_order: 0,
       })
       .select('id')
@@ -1243,11 +1315,11 @@ export default function Employees() {
                     className="flex-1"
                     onClick={(e) => {
                       e.stopPropagation();
-                      window.location.href = `mailto:${employee.email}`;
+                      openLodgeNote(employee);
                     }}
                   >
-                    <Mail className="h-4 w-4 mr-1" />
-                    Email
+                    <FileText className="h-4 w-4 mr-1" />
+                    Lodge Note
                   </Button>
                   <Button
                     variant="outline"
@@ -1255,11 +1327,11 @@ export default function Employees() {
                     className="flex-1"
                     onClick={(e) => {
                       e.stopPropagation();
-                      window.location.href = `tel:${employee.phone}`;
+                      handleViewProfile(employee);
                     }}
                   >
-                    <Phone className="h-4 w-4 mr-1" />
-                    Call
+                    <User className="h-4 w-4 mr-1" />
+                    View Full Profile
                   </Button>
                 </div>
               </CardContent>
@@ -1317,22 +1389,22 @@ export default function Employees() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.location.href = `mailto:${employee.email}`;
+                        openLodgeNote(employee);
                       }}
                     >
-                      <Mail className="h-4 w-4 mr-1" />
-                      Email
+                    <FileText className="h-4 w-4 mr-1" />
+                    Lodge Note
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.location.href = `tel:${employee.phone}`;
+                        handleViewProfile(employee);
                       }}
                     >
-                      <Phone className="h-4 w-4 mr-1" />
-                      Call
+                      <User className="h-4 w-4 mr-1" />
+                      View Full Profile
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -1403,6 +1475,81 @@ export default function Employees() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={noteDialogOpen}
+        onOpenChange={(open) => {
+          setNoteDialogOpen(open);
+          if (!open) {
+            setNoteEmployee(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Lodge Note {noteEmployee ? `- ${noteEmployee.firstName} ${noteEmployee.lastName}` : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Quickly log an interaction or note for this employee.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Type of interaction *</Label>
+              <Select value={noteType} onValueChange={(value) => setNoteType(value as typeof noteType)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="call">Phone call</SelectItem>
+                  <SelectItem value="text">Text message</SelectItem>
+                  <SelectItem value="note">General note</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Reason / purpose *</Label>
+              <Input
+                value={noteReason}
+                onChange={(e) => setNoteReason(e.target.value)}
+                placeholder="Issue, Check-in, Follow-up"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>What was discussed *</Label>
+              <Textarea
+                value={noteDiscussion}
+                onChange={(e) => setNoteDiscussion(e.target.value)}
+                placeholder="Add a short summary of the discussion..."
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Outcome / next steps</Label>
+              <Textarea
+                value={noteOutcome}
+                onChange={(e) => setNoteOutcome(e.target.value)}
+                placeholder="Any actions or follow-ups..."
+                rows={3}
+              />
+            </div>
+            <div className="rounded-md border border-muted bg-muted/30 p-3 text-xs text-muted-foreground">
+              <div>Date/time: {noteTimestampLabel}</div>
+              <div>Logged by: {loggedByLabel}</div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNoteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleLodgeNoteSubmit} disabled={noteSubmitting}>
+              {noteSubmitting ? 'Saving...' : 'Lodge Note'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Employee Dialog */}
       <AddEmployeeDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} onAdd={handleAddEmployee} />

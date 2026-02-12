@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Upload, Plus, AlertTriangle, CheckCircle, Pencil } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Plus, AlertTriangle, CheckCircle, Pencil } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -23,12 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { CertificationDialog } from '@/components/employees/CertificationDialog';
 import { Employee, EmploymentType, Document, Certification, ComplianceStatus } from '@/types/hrms';
 import type { AwardClassification } from '@/hooks/useSettings';
-import { format, differenceInDays, isValid } from 'date-fns';
+import { format, differenceInDays, isValid, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
-import { CertificationDialog } from './CertificationDialog';
+import { useComplianceRules, useDocumentTypes } from '@/hooks/useDocuments';
 import { supabase } from '@/integrations/supabase/client';
 
 interface EmployeeDetailSheetProps {
@@ -69,8 +70,6 @@ export function EmployeeDetailSheet({
   onOpenChange,
   onUpdate,
   awardClassifications = [],
-  onSaveCertification,
-  onDeleteCertification,
   onUploadDocument,
 }: EmployeeDetailSheetProps) {
   const NO_AWARD_VALUE = '__none__';
@@ -80,10 +79,225 @@ export function EmployeeDetailSheet({
   const [isDragActive, setIsDragActive] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [certDialogOpen, setCertDialogOpen] = useState(false);
-  const [selectedCertification, setSelectedCertification] = useState<Certification | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const { rules: complianceRules, loading: complianceRulesLoading } = useComplianceRules();
+  const { documentTypes, loading: documentTypesLoading } = useDocumentTypes(undefined, {
+    category: 'Document',
+  });
+  const [complianceDocs, setComplianceDocs] = useState<Array<{
+    id: string;
+    document_type_id: string;
+    status: string;
+    issue_date: string | null;
+    expiry_date: string | null;
+    file_url: string | null;
+    file_name: string;
+    created_at: string;
+    document_type?: { name: string | null; category?: string | null };
+  }>>([]);
+  const [complianceDocsLoading, setComplianceDocsLoading] = useState(false);
+  const [addRequirementDialogOpen, setAddRequirementDialogOpen] = useState(false);
+  const [selectedRequirementId, setSelectedRequirementId] = useState<string>('');
+
+  useEffect(() => {
+    if (!employee) return;
+    let isActive = true;
+
+    const fetchComplianceDocs = async () => {
+      try {
+        setComplianceDocsLoading(true);
+        const { data, error } = await supabase
+          .from('employee_documents')
+          .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category)')
+          .eq('user_id', employee.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Failed to load compliance documents:', error);
+          if (isActive) setComplianceDocs([]);
+          return;
+        }
+
+        if (isActive) setComplianceDocs(data || []);
+      } finally {
+        if (isActive) setComplianceDocsLoading(false);
+      }
+    };
+
+    fetchComplianceDocs();
+    return () => {
+      isActive = false;
+    };
+  }, [employee]);
+  const requiredComplianceRules = useMemo(() => {
+    if (!employee) return [];
+    const roleName = employee.position?.toLowerCase() || '';
+    const departmentName = employee.department || '';
+
+    return complianceRules.filter((rule) => {
+      if (!rule.is_required) return false;
+      const category = rule.document_type?.category || 'Document';
+      if (category !== 'Compliance') return false;
+      if (rule.target_type === 'all') return true;
+      if (rule.target_type === 'role') {
+        return (rule.target_value || '').toLowerCase() === roleName;
+      }
+      if (rule.target_type === 'department') {
+        return rule.target_value === departmentName;
+      }
+      return false;
+    });
+  }, [complianceRules, employee]);
+
+  const requiredComplianceChecklist = useMemo(() => {
+    const complianceDocsOnly = complianceDocs.filter(
+      (doc) => (doc.document_type?.category || 'Document') === 'Compliance',
+    );
+    return requiredComplianceRules.map((rule) => {
+      const match = complianceDocsOnly.find(
+        (doc) => doc.document_type_id === rule.document_type_id,
+      );
+      return {
+        rule,
+        document: match || null,
+      };
+    });
+  }, [complianceDocs, requiredComplianceRules]);
+
+  const documentCategoryDocs = useMemo(
+    () =>
+      complianceDocs.filter(
+        (doc) => (doc.document_type?.category || 'Document') === 'Document',
+      ),
+    [complianceDocs],
+  );
+  const documentRequirementsChecklist = useMemo(() => {
+    const documentDocsOnly = complianceDocs.filter(
+      (doc) => (doc.document_type?.category || 'Document') === 'Document',
+    );
+    return documentTypes
+      .filter((docType) => (docType.category || 'Document') === 'Document')
+      .filter((docType) => docType.is_required)
+      .map((docType) => {
+        const match = documentDocsOnly.find(
+          (doc) => doc.document_type_id === docType.id,
+        );
+        return {
+          documentType: docType,
+          document: match || null,
+        };
+      });
+  }, [complianceDocs, documentTypes]);
+  const selectedRequirement = useMemo(
+    () => requiredComplianceRules.find((rule) => rule.id === selectedRequirementId),
+    [requiredComplianceRules, selectedRequirementId],
+  );
+  const selectedRequirementDoc = useMemo(() => {
+    if (!selectedRequirement) return null;
+    return (
+      complianceDocs.find(
+        (doc) =>
+          doc.document_type_id === selectedRequirement.document_type_id &&
+          (doc.document_type?.category || 'Document') === 'Compliance',
+      ) || null
+    );
+  }, [complianceDocs, selectedRequirement]);
+
+  const getRequirementStatus = (document: (typeof complianceDocs)[number] | null) => {
+    if (!document) {
+      return {
+        type: 'missing' as const,
+        label: 'No document uploaded',
+        icon: Plus,
+        className: 'text-muted-foreground',
+      };
+    }
+
+    const status = document.status;
+    const expiryDate = document.expiry_date ? new Date(document.expiry_date) : null;
+
+    if (status === 'approved') {
+      if (expiryDate && isPast(expiryDate)) {
+        return {
+          type: 'expired' as const,
+          label: `Expired ${format(expiryDate, 'MMM d, yyyy')}`,
+          icon: AlertTriangle,
+          className: 'bg-destructive/10 text-destructive',
+        };
+      }
+
+      if (expiryDate) {
+        const days = differenceInDays(expiryDate, new Date());
+        const isExpiring = days <= 30;
+        return {
+          type: isExpiring ? ('expiring' as const) : ('compliant' as const),
+          label: `Expires ${format(expiryDate, 'MMM d, yyyy')} (${days} days)`,
+          icon: Clock,
+          className: isExpiring ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success',
+        };
+      }
+
+      return {
+        type: 'compliant' as const,
+        label: 'Expiry date not set',
+        icon: CheckCircle,
+        className: 'bg-success/10 text-success',
+      };
+    }
+
+    if (status === 'pending') {
+      if (expiryDate) {
+        if (isPast(expiryDate)) {
+          return {
+            type: 'expired' as const,
+            label: `Expired ${format(expiryDate, 'MMM d, yyyy')}`,
+            icon: AlertTriangle,
+            className: 'bg-destructive/10 text-destructive',
+          };
+        }
+        const days = differenceInDays(expiryDate, new Date());
+        return {
+          type: 'compliant' as const,
+          label: `Expires ${format(expiryDate, 'MMM d, yyyy')} (${days} days)`,
+          icon: CheckCircle,
+          className: 'bg-success/10 text-success',
+        };
+      }
+      return {
+        type: 'pending' as const,
+        label: 'Expiry date not set',
+        icon: Clock,
+        className: 'bg-warning/10 text-warning',
+      };
+    }
+
+    if (status === 'rejected') {
+      return {
+        type: 'rejected' as const,
+        label: 'Rejected',
+        icon: AlertTriangle,
+        className: 'bg-destructive/10 text-destructive',
+      };
+    }
+
+    if (status === 'expired') {
+      return {
+        type: 'expired' as const,
+        label: expiryDate ? `Expired ${format(expiryDate, 'MMM d, yyyy')}` : 'Expired',
+        icon: AlertTriangle,
+        className: 'bg-destructive/10 text-destructive',
+      };
+    }
+
+    return {
+      type: 'unknown' as const,
+      label: 'Unknown',
+      icon: AlertTriangle,
+      className: 'bg-muted/50 text-muted-foreground',
+    };
+  };
 
   if (!employee) return null;
 
@@ -92,15 +306,6 @@ export function EmployeeDetailSheet({
     if (!value) return 'Not set';
     const parsed = new Date(value);
     return isValid(parsed) ? format(parsed, 'MMM d, yyyy') : 'Not set';
-  };
-
-  const getExpiryInfo = (expiryDate?: string | null) => {
-    if (!expiryDate) return { daysUntil: null, expiry: null };
-    const expiry = new Date(expiryDate);
-    if (!isValid(expiry)) return { daysUntil: null, expiry: null };
-    const today = new Date();
-    const daysUntil = differenceInDays(expiry, today);
-    return { daysUntil, expiry };
   };
 
   const getStatusIcon = (status: ComplianceStatus) => {
@@ -116,106 +321,6 @@ export function EmployeeDetailSheet({
     }
   };
 
-  const handleAddCertification = () => {
-    setSelectedCertification(null);
-    setCertDialogOpen(true);
-  };
-
-  const handleEditCertification = (cert: Certification) => {
-    setSelectedCertification(cert);
-    setCertDialogOpen(true);
-  };
-
-  const handleSaveCertification = async (certification: Certification, documentFile?: File) => {
-    let newDocuments = [...employee.documents];
-    
-    // If a document file was provided, add it to the documents list
-    if (documentFile) {
-      const newDocument: Document = {
-        id: `doc-${Date.now()}`,
-        name: documentFile.name,
-        type: 'certificate',
-        uploadedAt: new Date().toISOString(),
-        url: URL.createObjectURL(documentFile),
-      };
-      newDocuments = [...newDocuments, newDocument];
-      certification.documentId = newDocument.id;
-    }
-
-    // Update or add certification
-    const existingIndex = employee.certifications.findIndex(c => c.id === certification.id);
-    let newCertifications: Certification[];
-    
-    if (existingIndex >= 0) {
-      newCertifications = [...employee.certifications];
-      newCertifications[existingIndex] = certification;
-    } else {
-      newCertifications = [...employee.certifications, certification];
-    }
-
-    // Recalculate overall compliance status
-    const hasExpired = newCertifications.some(c => c.status === 'expired');
-    const hasExpiring = newCertifications.some(c => c.status === 'expiring');
-    const hasPending = newCertifications.some(c => c.status === 'pending');
-    
-    let overallStatus: ComplianceStatus = 'compliant';
-    if (hasExpired) overallStatus = 'expired';
-    else if (hasExpiring) overallStatus = 'expiring';
-    else if (hasPending) overallStatus = 'pending';
-
-    if (onSaveCertification) {
-      await onSaveCertification(certification, documentFile, overallStatus);
-      return;
-    }
-
-    const updatedEmployee: Employee = {
-      ...employee,
-      certifications: newCertifications,
-      documents: newDocuments,
-      complianceStatus: overallStatus,
-    };
-
-    onUpdate?.(updatedEmployee);
-
-    toast({
-      title: existingIndex >= 0 ? 'Certification Updated' : 'Certification Added',
-      description: `${certification.name} has been ${existingIndex >= 0 ? 'updated' : 'added'} successfully.`,
-    });
-  };
-
-  const handleDeleteCertification = async (certificationId: string) => {
-    const newCertifications = employee.certifications.filter(c => c.id !== certificationId);
-    
-    // Recalculate overall compliance status
-    const hasExpired = newCertifications.some(c => c.status === 'expired');
-    const hasExpiring = newCertifications.some(c => c.status === 'expiring');
-    const hasPending = newCertifications.some(c => c.status === 'pending');
-    
-    let overallStatus: ComplianceStatus = 'compliant';
-    if (hasExpired) overallStatus = 'expired';
-    else if (hasExpiring) overallStatus = 'expiring';
-    else if (hasPending) overallStatus = 'pending';
-
-    const finalStatus = newCertifications.length === 0 ? 'pending' : overallStatus;
-
-    if (onDeleteCertification) {
-      await onDeleteCertification(certificationId, finalStatus);
-      return;
-    }
-
-    const updatedEmployee: Employee = {
-      ...employee,
-      certifications: newCertifications,
-      complianceStatus: finalStatus,
-    };
-
-    onUpdate?.(updatedEmployee);
-
-    toast({
-      title: 'Certification Removed',
-      description: 'The certification has been removed.',
-    });
-  };
 
   const handleDocumentUpload = async (
     eventOrFile: React.ChangeEvent<HTMLInputElement> | File
@@ -251,6 +356,12 @@ export function EmployeeDetailSheet({
     if (onUploadDocument) {
       try {
         await onUploadDocument(file);
+        const { data } = await supabase
+          .from('employee_documents')
+          .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category)')
+          .eq('user_id', employee.id)
+          .order('created_at', { ascending: false });
+        setComplianceDocs(data || []);
         toast({
           title: 'Document Uploaded',
           description: `${file.name} has been uploaded successfully.`,
@@ -301,6 +412,118 @@ export function EmployeeDetailSheet({
     fileInputRef.current?.click();
   };
 
+  const handleOpenRequirementDialog = (ruleId?: string) => {
+    if (requiredComplianceRules.length === 0) {
+      toast({
+        title: 'No requirements',
+        description: 'No compliance requirements are assigned to this role.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setSelectedRequirementId(ruleId || requiredComplianceRules[0].id);
+    setAddRequirementDialogOpen(true);
+  };
+
+  const uploadRequirementDocument = async (
+    file: File,
+    documentTypeId: string,
+    issueDate?: string,
+    expiryDate?: string
+  ) => {
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Invalid File Type',
+        description: 'Please upload a PDF or image file (JPG, PNG)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast({
+        title: 'File Too Large',
+        description: 'Please upload a file smaller than 10MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploadingDocument(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `employees/${employee.id}/compliance/${documentTypeId}/${Date.now()}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('employee-documents')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('employee-documents')
+        .getPublicUrl(filePath);
+      const fileUrl = data.publicUrl;
+
+      const { error: insertError } = await supabase
+        .from('employee_documents')
+        .insert({
+          user_id: employee.id,
+          document_type_id: documentTypeId,
+          file_url: fileUrl,
+          file_name: file.name,
+          issue_date: issueDate || null,
+          expiry_date: expiryDate || null,
+          status: 'pending',
+        });
+
+      if (insertError) throw insertError;
+
+      const { data: refreshed } = await supabase
+        .from('employee_documents')
+        .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category)')
+        .eq('user_id', employee.id)
+        .order('created_at', { ascending: false });
+
+      setComplianceDocs(refreshed || []);
+      toast({
+        title: 'Document Uploaded',
+        description: `${file.name} has been uploaded successfully.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Upload failed',
+        description: err?.message || 'Unable to upload document.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingDocument(false);
+    }
+  };
+
+
+  const handleRequirementDialogSubmit = async (payload: {
+    requirementId: string;
+    issueDate: string;
+    expiryDate: string;
+    documentFile?: File;
+  }) => {
+    const rule = requiredComplianceRules.find((r) => r.id === payload.requirementId);
+    if (!rule || !payload.documentFile) return;
+    await uploadRequirementDocument(
+      payload.documentFile,
+      rule.document_type_id,
+      payload.issueDate,
+      payload.expiryDate
+    );
+    setAddRequirementDialogOpen(false);
+    setSelectedRequirementId('');
+  };
+
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -343,7 +566,6 @@ export function EmployeeDetailSheet({
 
   const awardLabel =
     awardClassifications.find((award) => award.id === employee.awardClassification)?.name || 'Not set';
-  const certifications = employee.certifications ?? [];
 
   const handleStartEdit = () => {
     setEditData(buildEditData(employee));
@@ -797,67 +1019,78 @@ export function EmployeeDetailSheet({
                     </div>
                     <Progress value={compliancePercentage} className="h-2" />
                   </div>
-                  
-                  {/* Certifications Section */}
+
+                  {/* Requirements Section */}
                   <div className="space-y-2 mt-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground font-medium">Certifications</p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handleAddCertification}
-                        className="h-7 text-xs"
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Add
-                      </Button>
+                      <p className="text-xs text-muted-foreground font-medium">Requirements</p>
                     </div>
                     
-                  {certifications.length > 0 ? (
+                  {complianceRulesLoading || complianceDocsLoading ? (
+                    <div className="text-xs text-muted-foreground">Loading requirements...</div>
+                  ) : requiredComplianceChecklist.length > 0 ? (
                     <div className="space-y-2">
-                      {certifications.map((cert) => {
-                          const { daysUntil, expiry } = getExpiryInfo(cert.expiryDate);
+                      {requiredComplianceChecklist.map((item) => {
+                          const status = getRequirementStatus(item.document);
+                          const statusForIcon: ComplianceStatus =
+                            status.type === 'expired' || status.type === 'rejected'
+                              ? 'expired'
+                              : status.type === 'expiring'
+                              ? 'expiring'
+                              : status.type === 'pending' || status.type === 'missing'
+                              ? 'pending'
+                              : 'compliant';
+                          const hasDocument = Boolean(item.document);
                           return (
                             <div 
-                              key={cert.id} 
+                              key={item.rule.id} 
                               className={cn(
                                 "p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors",
-                                cert.status === 'expired' && "border-destructive/50 bg-destructive/5",
-                                cert.status === 'expiring' && "border-warning/50 bg-warning/5",
-                                cert.status === 'compliant' && "border-success/50 bg-success/5",
-                                cert.status === 'pending' && "border-muted"
+                                status.type === 'expired' && "border-destructive/50 bg-destructive/5",
+                                status.type === 'expiring' && "border-warning/50 bg-warning/5",
+                                status.type === 'compliant' && "border-success/50 bg-success/5",
+                                status.type === 'rejected' && "border-destructive/50 bg-destructive/5",
+                                status.type === 'pending' && "border-muted",
+                                status.type === 'missing' && "border-muted"
                               )}
-                              onClick={() => handleEditCertification(cert)}
+                              onClick={() => handleOpenRequirementDialog(item.rule.id)}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-start gap-2 flex-1 min-w-0">
-                                  {getStatusIcon(cert.status)}
+                                  {getStatusIcon(statusForIcon)}
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">{cert.name}</p>
+                                    <p className="text-sm font-medium truncate">{item.rule.document_type?.name || 'Unknown document'}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                      {cert.status === 'pending' ? (
-                                        'Awaiting documentation'
-                                      ) : !expiry ? (
-                                        'Expiry date not set'
-                                      ) : cert.status === 'expired' ? (
-                                        `Expired ${format(expiry, 'MMM d, yyyy')}`
-                                      ) : (
-                                        `Expires ${format(expiry, 'MMM d, yyyy')} (${daysUntil} days)`
-                                      )}
+                                      {status.label}
                                     </p>
                                   </div>
                                 </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6 shrink-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditCertification(cert);
-                                  }}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
+                                {hasDocument ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenRequirementDialog(item.rule.id);
+                                    }}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenRequirementDialog(item.rule.id);
+                                    }}
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           );
@@ -866,14 +1099,14 @@ export function EmployeeDetailSheet({
                     ) : (
                       <div className="text-center py-4 border-2 border-dashed border-muted rounded-lg">
                         <Shield className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                        <p className="text-sm text-muted-foreground mb-2">No Certifications added</p>
+                        <p className="text-sm text-muted-foreground mb-2">No Requirements added</p>
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          onClick={handleAddCertification}
+                          onClick={() => handleOpenRequirementDialog()}
                         >
                           <Plus className="h-3 w-3 mr-1" />
-                          Add Certification
+                          Add Requirement
                         </Button>
                       </div>
                     )}
@@ -887,17 +1120,8 @@ export function EmployeeDetailSheet({
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-sm flex items-center gap-2">
                       <FileText className="h-4 w-4" />
-                      Documents ({employee.documents.length})
+                      Documents
                     </h3>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleUploadClick}
-                      disabled={isUploadingDocument}
-                    >
-                      <Upload className="h-3 w-3 mr-1" />
-                      {isUploadingDocument ? 'Uploading...' : 'Upload'}
-                    </Button>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -915,25 +1139,100 @@ export function EmployeeDetailSheet({
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
-                  {employee.documents.length > 0 ? (
+                  {documentTypesLoading ? (
+                    <div className="text-xs text-muted-foreground">Loading requirements...</div>
+                  ) : documentRequirementsChecklist.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      {documentRequirementsChecklist.map((item) => {
+                        const hasDocument = Boolean(item.document);
+                        const displayDate = item.document?.issue_date || item.document?.created_at || null;
+                        return (
+                          <div
+                            key={item.documentType.id}
+                            className={cn(
+                              "p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors",
+                              hasDocument ? "border-muted" : "border-muted"
+                            )}
+                            onClick={() => {
+                              const rule = requiredComplianceRules.find(
+                                (r) => r.document_type_id === item.documentType.id,
+                              );
+                              if (rule) {
+                                handleOpenRequirementDialog(rule.id);
+                              }
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-2 flex-1 min-w-0">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">
+                                    {item.documentType.name || 'Unknown document'}
+                                  </p>
+                                  {hasDocument && displayDate ? (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {formatDateOrDash(displayDate)}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+                              {hasDocument ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (item.document?.file_url) {
+                                      window.open(item.document.file_url, '_blank', 'noopener,noreferrer');
+                                    }
+                                  }}
+                                >
+                                  View
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const rule = requiredComplianceRules.find(
+                                      (r) => r.document_type_id === item.documentType.id,
+                                    );
+                                    if (rule) {
+                                      handleOpenRequirementDialog(rule.id);
+                                    }
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Document
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {documentCategoryDocs.length > 0 && (
                     <div className="space-y-2">
-                      {employee.documents.map((doc) => (
+                      {documentCategoryDocs.map((doc) => (
                         <div key={doc.id} className="flex items-center justify-between text-sm p-2 rounded-lg bg-muted/50">
                           <div className="flex items-center gap-2 min-w-0">
                             <FileText className="h-4 w-4 text-muted-foreground" />
-                            <span className="truncate">{doc.name}</span>
+                            <span className="truncate">{doc.file_name}</span>
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-muted-foreground">
-                              {formatDateOrDash(doc.uploadedAt)}
+                              {formatDateOrDash(doc.created_at)}
                             </span>
-                            {doc.url && (
+                            {doc.file_url && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  window.open(doc.url, '_blank', 'noopener,noreferrer');
+                                  window.open(doc.file_url || '', '_blank', 'noopener,noreferrer');
                                 }}
                               >
                                 View
@@ -942,35 +1241,6 @@ export function EmployeeDetailSheet({
                           </div>
                         </div>
                       ))}
-                      <div className="flex items-center justify-between pt-2">
-                        <p className="text-xs text-muted-foreground">
-                          Drag and drop a file here, or
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleUploadClick}
-                          disabled={isUploadingDocument}
-                        >
-                          <Plus className="h-3 w-3 mr-1" />
-                          Add Document
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm text-muted-foreground mb-2">No documents uploaded</p>
-                      <p className="text-xs text-muted-foreground mb-3">Drag and drop a file here</p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handleUploadClick}
-                        disabled={isUploadingDocument}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Add Document
-                      </Button>
                     </div>
                   )}
                 </div>
@@ -1026,13 +1296,21 @@ export function EmployeeDetailSheet({
         </div>
       </SheetContent>
 
-      {/* Certification Dialog */}
       <CertificationDialog
-        open={certDialogOpen}
-        onOpenChange={setCertDialogOpen}
-        certification={selectedCertification}
-        onSave={handleSaveCertification}
-        onDelete={handleDeleteCertification}
+        open={addRequirementDialogOpen}
+        onOpenChange={setAddRequirementDialogOpen}
+        mode="requirement"
+        requirementOptions={requiredComplianceRules.map((rule) => ({
+          id: rule.id,
+          name: rule.document_type?.name || 'Unknown document',
+        }))}
+        selectedRequirementId={selectedRequirementId}
+        onRequirementChange={setSelectedRequirementId}
+        requirementName={selectedRequirement?.document_type?.name || 'Requirement'}
+        requirementHasDocument={Boolean(selectedRequirementDoc)}
+        requirementIssueDate={selectedRequirementDoc?.issue_date || null}
+        requirementExpiryDate={selectedRequirementDoc?.expiry_date || null}
+        onSaveRequirement={handleRequirementDialogSubmit}
       />
     </Sheet>
   );

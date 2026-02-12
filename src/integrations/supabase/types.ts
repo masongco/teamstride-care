@@ -359,6 +359,7 @@ export type Database = {
       }
       compliance_rules: {
         Row: {
+          organisation_id: string
           created_at: string
           document_type_id: string
           id: string
@@ -368,6 +369,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          organisation_id: string
           created_at?: string
           document_type_id: string
           id?: string
@@ -377,6 +379,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          organisation_id?: string
           created_at?: string
           document_type_id?: string
           id?: string
@@ -785,6 +788,8 @@ export type Database = {
       }
       document_types: {
         Row: {
+          organisation_id: string
+          category: string | null
           created_at: string
           description: string | null
           display_order: number | null
@@ -796,6 +801,8 @@ export type Database = {
           validity_months: number | null
         }
         Insert: {
+          organisation_id: string
+          category?: string | null
           created_at?: string
           description?: string | null
           display_order?: number | null
@@ -807,6 +814,8 @@ export type Database = {
           validity_months?: number | null
         }
         Update: {
+          organisation_id?: string
+          category?: string | null
           created_at?: string
           description?: string | null
           display_order?: number | null

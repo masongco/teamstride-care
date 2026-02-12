@@ -7,6 +7,8 @@ export type RecurrenceType = 'none' | 'annual' | 'biannual' | 'quarterly' | 'mon
 
 export interface DocumentType {
   id: string;
+  organisation_id: string;
+  category?: 'Compliance' | 'Document' | string;
   name: string;
   description: string | null;
   validity_months: number | null;
@@ -55,6 +57,7 @@ export interface DocumentReview {
 
 export interface ComplianceRule {
   id: string;
+  organisation_id: string;
   document_type_id: string;
   target_type: AssignmentTargetType;
   target_value: string | null;

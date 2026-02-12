@@ -6,6 +6,7 @@ import {
   AwardClassification,
   AwardClassificationInput,
 } from '@/hooks/useSettings';
+import { useComplianceRules, useDocumentTypes } from '@/hooks/useDocuments';
 import {
   useUserRole,
   useUserRolesManagement,
@@ -77,6 +78,7 @@ import {
   X,
   Download,
   Building,
+  FileCheck,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { accessDeniedMessage } from '@/lib/errorMessages';
@@ -200,6 +202,13 @@ export default function Settings() {
     updateAwardClassification,
     deleteAwardClassification,
   } = settings;
+  const { createDocumentType } = useDocumentTypes(effectiveOrgId);
+  const {
+    rules: complianceRules,
+    loading: complianceRulesLoading,
+    createRule: createComplianceRule,
+    deleteRule: deleteComplianceRule,
+  } = useComplianceRules(effectiveOrgId);
 
   const openOrgDialog = (organisation?: Organisation) => {
     if (organisation) {
@@ -304,6 +313,20 @@ export default function Settings() {
   const [awardOvertimeMult, setAwardOvertimeMult] = useState('1.5');
   const [awardSubmitting, setAwardSubmitting] = useState(false);
 
+  // Compliance rules state
+  const [complianceDialogOpen, setComplianceDialogOpen] = useState(false);
+  const [selectedCompliancePosition, setSelectedCompliancePosition] =
+    useState<string>('all');
+  const [complianceRequirementName, setComplianceRequirementName] =
+    useState('');
+  const [complianceRequirementDescription, setComplianceRequirementDescription] =
+    useState('');
+  const [complianceRequirementRequired, setComplianceRequirementRequired] =
+    useState(true);
+  const [complianceRequirementCategory, setComplianceRequirementCategory] =
+    useState<'Compliance' | 'Document'>('Compliance');
+  const [complianceSubmitting, setComplianceSubmitting] = useState(false);
+
   // Create User state
   const [createUserDialogOpen, setCreateUserDialogOpen] =
     useState(false);
@@ -312,6 +335,18 @@ export default function Settings() {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] =
     useState<AppRole | 'all'>('all');
+
+  // Compliance rules filter state
+  const [complianceSearchQuery, setComplianceSearchQuery] =
+    useState('');
+  const [complianceTargetFilter, setComplianceTargetFilter] =
+    useState<'all' | 'role' | 'department' | 'location'>('all');
+  const [complianceRoleFilter, setComplianceRoleFilter] =
+    useState<'all' | string>('all');
+  const [complianceRequiredFilter, setComplianceRequiredFilter] =
+    useState<'all' | 'required' | 'optional'>('all');
+  const [complianceCategoryFilter, setComplianceCategoryFilter] =
+    useState<'all' | string>('all');
 
   // Filtered users
   const filteredUsers = users.filter((user) => {
@@ -327,6 +362,47 @@ export default function Settings() {
       userRoleFilter === 'all' || user.role === userRoleFilter;
     return matchesSearch && matchesRole;
   });
+
+  const filteredComplianceRules = complianceRules.filter((rule) => {
+    const query = complianceSearchQuery.trim().toLowerCase();
+    const name = rule.document_type?.name?.toLowerCase() || '';
+    const target = rule.target_value?.toLowerCase() || '';
+    const matchesSearch =
+      query.length === 0 || name.includes(query) || target.includes(query);
+    const matchesTarget =
+      complianceTargetFilter === 'all' ||
+      rule.target_type === complianceTargetFilter;
+    const matchesRole =
+      complianceRoleFilter === 'all' ||
+      (rule.target_type === 'role' &&
+        (rule.target_value || '') === complianceRoleFilter);
+    const matchesRequired =
+      complianceRequiredFilter === 'all' ||
+      (complianceRequiredFilter === 'required' && rule.is_required) ||
+      (complianceRequiredFilter === 'optional' && !rule.is_required);
+    const category = rule.document_type?.category || 'Document';
+    const matchesCategory =
+      complianceCategoryFilter === 'all' ||
+      category === complianceCategoryFilter;
+    return matchesSearch && matchesTarget && matchesRole && matchesRequired && matchesCategory;
+  });
+
+  const complianceRoleOptions = Array.from(
+    new Set(
+      complianceRules
+        .filter((rule) => rule.target_type === 'role')
+        .map((rule) => rule.target_value)
+        .filter((value): value is string => Boolean(value))
+    )
+  ).sort();
+
+  const complianceCategoryOptions = Array.from(
+    new Set(
+      complianceRules.map(
+        (rule) => rule.document_type?.category || 'Document'
+      )
+    )
+  ).sort();
 
   // Department handlers
   const openDeptDialog = (department?: Department) => {
@@ -532,10 +608,62 @@ export default function Settings() {
     setDeletingAward(null);
   };
 
+  const handleComplianceSubmit = async () => {
+    if (!complianceRequirementName.trim()) return;
+    setComplianceSubmitting(true);
+
+    const isAllRoles = selectedCompliancePosition === 'all';
+    const createdDocType = await createDocumentType({
+      name: complianceRequirementName.trim(),
+      description: complianceRequirementDescription.trim() || null,
+      validity_months: null,
+      is_required: complianceRequirementRequired,
+      is_active: true,
+      category: complianceRequirementCategory,
+      display_order: 0,
+      organisation_id: effectiveOrgId,
+    });
+
+    if (!createdDocType) {
+      setComplianceSubmitting(false);
+      return;
+    }
+
+    await createComplianceRule({
+      document_type_id: createdDocType.id,
+      target_type: isAllRoles ? 'all' : 'role',
+      target_value: isAllRoles ? null : selectedCompliancePosition,
+      is_required: true,
+      organisation_id: effectiveOrgId,
+    });
+
+    setComplianceSubmitting(false);
+    setComplianceDialogOpen(false);
+    setComplianceRequirementName('');
+    setComplianceRequirementDescription('');
+    setComplianceRequirementRequired(true);
+    setComplianceRequirementCategory('Compliance');
+    setSelectedCompliancePosition('all');
+  };
+
+  const handleComplianceDelete = async (ruleId: string) => {
+    await deleteComplianceRule(ruleId);
+  };
+
   const getDepartmentName = (departmentId: string | null) => {
     if (!departmentId) return null;
     const dept = departments.find((d) => d.id === departmentId);
     return dept?.name || null;
+  };
+
+  const getComplianceTargetLabel = (targetType: string, targetValue: string | null) => {
+    if (targetType === 'all') return 'All roles';
+    if (targetType === 'role') return targetValue || 'Role';
+    if (targetType === 'department') {
+      return getDepartmentName(targetValue) || targetValue || 'Department';
+    }
+    if (targetType === 'location') return targetValue || 'Location';
+    return targetValue || targetType;
   };
 
   const formatCurrency = (amount: number) => {
@@ -702,6 +830,12 @@ export default function Settings() {
               <DollarSign className="h-4 w-4" />
               Award Classifications
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="compliance" className="flex items-center gap-2">
+                <FileCheck className="h-4 w-4" />
+                Requirements
+              </TabsTrigger>
+            )}
             {isAdmin && (
               <TabsTrigger value="roles" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
@@ -999,6 +1133,242 @@ export default function Settings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Compliance Requirements Tab - Admin Only */}
+        {isAdmin && (
+          <TabsContent value="compliance">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <FileCheck className="h-5 w-5" />
+                    Requirements
+                  </CardTitle>
+                  <CardDescription>
+                    Assign required compliance documents to job titles
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => setComplianceDialogOpen(true)}
+                  size="sm"
+                  disabled={!hasOrgContext}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Requirement
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {!hasOrgContext ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Select an organisation to manage compliance requirements</p>
+                  </div>
+                ) : complianceRulesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : complianceRules.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No compliance requirements yet</p>
+                    <p className="text-sm">Add your first requirement to get started</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search requirements..."
+                          value={complianceSearchQuery}
+                          onChange={(e) =>
+                            setComplianceSearchQuery(e.target.value)
+                          }
+                          className="pl-9"
+                        />
+                      </div>
+                      <Select
+                        value={complianceTargetFilter}
+                        onValueChange={(value) =>
+                          setComplianceTargetFilter(
+                            value as typeof complianceTargetFilter,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="w-full sm:w-[200px]">
+                          <SelectValue placeholder="Applies to" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Targets</SelectItem>
+                          <SelectItem value="role">Role</SelectItem>
+                          <SelectItem value="department">Department</SelectItem>
+                          <SelectItem value="location">Location</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={complianceRoleFilter}
+                        onValueChange={(value) =>
+                          setComplianceRoleFilter(value as typeof complianceRoleFilter)
+                        }
+                      >
+                        <SelectTrigger className="w-full sm:w-[200px]">
+                          <SelectValue placeholder="Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Roles</SelectItem>
+                          {complianceRoleOptions.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={complianceRequiredFilter}
+                        onValueChange={(value) =>
+                          setComplianceRequiredFilter(
+                            value as typeof complianceRequiredFilter,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="w-full sm:w-[200px]">
+                          <SelectValue placeholder="Required" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="required">Required</SelectItem>
+                          <SelectItem value="optional">Optional</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={complianceCategoryFilter}
+                        onValueChange={(value) =>
+                          setComplianceCategoryFilter(
+                            value as typeof complianceCategoryFilter,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="w-full sm:w-[200px]">
+                          <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Categories</SelectItem>
+                          {complianceCategoryOptions.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {(complianceSearchQuery ||
+                      complianceTargetFilter !== 'all' ||
+                      complianceRoleFilter !== 'all' ||
+                      complianceRequiredFilter !== 'all' ||
+                      complianceCategoryFilter !== 'all') && (
+                      <div className="flex items-center gap-2 flex-wrap mb-4">
+                        <span className="text-sm text-muted-foreground">Active filters:</span>
+                        {complianceSearchQuery && (
+                          <Badge variant="secondary" className="gap-1">
+                            Search: {complianceSearchQuery}
+                            <X className="h-3 w-3 cursor-pointer" onClick={() => setComplianceSearchQuery('')} />
+                          </Badge>
+                        )}
+                        {complianceTargetFilter !== 'all' && (
+                          <Badge variant="secondary" className="gap-1">
+                            {complianceTargetFilter}
+                            <X className="h-3 w-3 cursor-pointer" onClick={() => setComplianceTargetFilter('all')} />
+                          </Badge>
+                        )}
+                        {complianceRoleFilter !== 'all' && (
+                          <Badge variant="secondary" className="gap-1">
+                            Role: {complianceRoleFilter}
+                            <X className="h-3 w-3 cursor-pointer" onClick={() => setComplianceRoleFilter('all')} />
+                          </Badge>
+                        )}
+                        {complianceRequiredFilter !== 'all' && (
+                          <Badge variant="secondary" className="gap-1">
+                            {complianceRequiredFilter === 'required' ? 'Required' : 'Optional'}
+                            <X className="h-3 w-3 cursor-pointer" onClick={() => setComplianceRequiredFilter('all')} />
+                          </Badge>
+                        )}
+                        {complianceCategoryFilter !== 'all' && (
+                          <Badge variant="secondary" className="gap-1">
+                            {complianceCategoryFilter}
+                            <X className="h-3 w-3 cursor-pointer" onClick={() => setComplianceCategoryFilter('all')} />
+                          </Badge>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() => {
+                            setComplianceSearchQuery('');
+                            setComplianceTargetFilter('all');
+                            setComplianceRoleFilter('all');
+                            setComplianceRequiredFilter('all');
+                            setComplianceCategoryFilter('all');
+                          }}
+                        >
+                          Clear all
+                        </Button>
+                      </div>
+                    )}
+                    {filteredComplianceRules.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No requirements match your filters</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Document Name</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Applies To</TableHead>
+                            <TableHead>Required</TableHead>
+                            <TableHead className="w-[100px]">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredComplianceRules.map((rule) => (
+                            <TableRow key={rule.id}>
+                              <TableCell className="font-medium">
+                                {rule.document_type?.name || 'Unknown document'}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {rule.document_type?.category || 'Document'}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {getComplianceTargetLabel(rule.target_type, rule.target_value)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={rule.is_required ? 'default' : 'secondary'}>
+                                  {rule.is_required ? 'Required' : 'Optional'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleComplianceDelete(rule.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* User Roles Tab - Admin Only */}
         {isAdmin && (
@@ -1740,6 +2110,127 @@ export default function Settings() {
                 'Update'
               ) : (
                 'Add'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Requirement Dialog */}
+      <Dialog
+        open={complianceDialogOpen}
+        onOpenChange={setComplianceDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Requirement</DialogTitle>
+            <DialogDescription>
+              Assign a required document to a job title
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Job Title</Label>
+              <Select
+                value={selectedCompliancePosition}
+                onValueChange={(val) => setSelectedCompliancePosition(val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a job title" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  {positions.map((pos) => (
+                    <SelectItem key={pos.id} value={pos.name}>
+                      {pos.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {positions.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Add positions in the Positions tab to assign role-specific requirements.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Requirement Name *</Label>
+              <Input
+                value={complianceRequirementName}
+                onChange={(e) => setComplianceRequirementName(e.target.value)}
+                placeholder="e.g., CPR Certificate"
+              />
+              <p className="text-xs text-muted-foreground">
+                This will create a new document type for the requirement.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select
+                value={complianceRequirementCategory}
+                onValueChange={(value) =>
+                  setComplianceRequirementCategory(
+                    value as typeof complianceRequirementCategory
+                  )
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Compliance">Compliance</SelectItem>
+                  <SelectItem value="Document">Document</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Description (Optional)</Label>
+              <Textarea
+                value={complianceRequirementDescription}
+                onChange={(e) =>
+                  setComplianceRequirementDescription(e.target.value)
+                }
+                placeholder="Add details or instructions (optional)"
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Required</p>
+                <p className="text-xs text-muted-foreground">
+                  Mark this requirement as mandatory.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant={complianceRequirementRequired ? 'default' : 'outline'}
+                size="sm"
+                onClick={() =>
+                  setComplianceRequirementRequired((prev) => !prev)
+                }
+              >
+                {complianceRequirementRequired ? 'Required' : 'Optional'}
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setComplianceDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleComplianceSubmit}
+              disabled={!complianceRequirementName.trim() || complianceSubmitting}
+            >
+              {complianceSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Add Requirement'
               )}
             </Button>
           </DialogFooter>

@@ -532,6 +532,7 @@ export default function MyProfile() {
           </p>
         </CardContent>
       </Card>
+
     </div>
   );
 }

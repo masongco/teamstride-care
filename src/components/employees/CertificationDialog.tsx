@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { CalendarIcon, Upload, X, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { z } from 'zod';
@@ -49,8 +49,22 @@ interface CertificationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   certification?: Certification | null;
-  onSave: (certification: Certification, documentFile?: File) => void | Promise<void>;
+  onSave?: (certification: Certification, documentFile?: File) => void | Promise<void>;
   onDelete?: (certificationId: string) => void;
+  mode?: 'certification' | 'requirement';
+  requirementOptions?: { id: string; name: string }[];
+  selectedRequirementId?: string;
+  onRequirementChange?: (id: string) => void;
+  requirementName?: string;
+  requirementHasDocument?: boolean;
+  requirementIssueDate?: string | null;
+  requirementExpiryDate?: string | null;
+  onSaveRequirement?: (payload: {
+    requirementId: string;
+    issueDate: string;
+    expiryDate: string;
+    documentFile?: File;
+  }) => void | Promise<void>;
 }
 
 function calculateStatus(expiryDate: Date): ComplianceStatus {
@@ -80,8 +94,18 @@ export function CertificationDialog({
   onOpenChange, 
   certification, 
   onSave, 
-  onDelete 
+  onDelete,
+  mode = 'certification',
+  requirementOptions = [],
+  selectedRequirementId,
+  onRequirementChange,
+  requirementName,
+  requirementHasDocument,
+  requirementIssueDate,
+  requirementExpiryDate,
+  onSaveRequirement,
 }: CertificationDialogProps) {
+  const isRequirementMode = mode === 'requirement';
   const isEditing = !!certification;
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -91,6 +115,7 @@ export function CertificationDialog({
     issueDate: certification?.issueDate ? new Date(certification.issueDate) : undefined as Date | undefined,
     expiryDate: certification?.expiryDate ? new Date(certification.expiryDate) : undefined as Date | undefined,
   });
+  const [requirementId, setRequirementId] = useState(selectedRequirementId || '');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,6 +125,41 @@ export function CertificationDialog({
   const [expiryDateInput, setExpiryDateInput] = useState(
     formData.expiryDate ? format(formData.expiryDate, 'dd/MM/yyyy') : ''
   );
+
+  useEffect(() => {
+    if (!open) return;
+    if (isRequirementMode) {
+      const issueDate = requirementIssueDate ? new Date(requirementIssueDate) : undefined;
+      const expiryDate = requirementExpiryDate ? new Date(requirementExpiryDate) : undefined;
+      setRequirementId(selectedRequirementId || '');
+      setFormData({
+        name: '',
+        type: 'police_check',
+        issueDate,
+        expiryDate,
+      });
+      setIssueDateInput(issueDate ? format(issueDate, 'dd/MM/yyyy') : '');
+      setExpiryDateInput(expiryDate ? format(expiryDate, 'dd/MM/yyyy') : '');
+      setDocumentFile(null);
+      setErrors({});
+      return;
+    }
+
+    setFormData({
+      name: certification?.name || '',
+      type: certification?.type || 'police_check',
+      issueDate: certification?.issueDate ? new Date(certification.issueDate) : undefined,
+      expiryDate: certification?.expiryDate ? new Date(certification.expiryDate) : undefined,
+    });
+    setIssueDateInput(
+      certification?.issueDate ? format(new Date(certification.issueDate), 'dd/MM/yyyy') : ''
+    );
+    setExpiryDateInput(
+      certification?.expiryDate ? format(new Date(certification.expiryDate), 'dd/MM/yyyy') : ''
+    );
+    setDocumentFile(null);
+    setErrors({});
+  }, [open, certification, isRequirementMode, selectedRequirementId]);
 
   const parseAuDate = (value: string): Date | undefined => {
     const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -229,9 +289,73 @@ export function CertificationDialog({
     }
 
     setDocumentFile(file);
+    if (errors.documentFile) {
+      setErrors((prev) => ({ ...prev, documentFile: '' }));
+    }
   };
 
   const handleSubmit = async () => {
+    if (isRequirementMode) {
+      const requirementErrors: Record<string, string> = {};
+      if (!requirementId) {
+        requirementErrors.requirementId = 'Requirement is required';
+      }
+      if (!formData.issueDate) {
+        requirementErrors.issueDate = 'Issue date is required';
+      }
+      if (!formData.expiryDate) {
+        requirementErrors.expiryDate = 'Expiry date is required';
+      }
+      if (!documentFile) {
+        requirementErrors.documentFile = 'Document is required';
+      }
+      if (
+        formData.issueDate &&
+        formData.expiryDate &&
+        formData.expiryDate <= formData.issueDate
+      ) {
+        requirementErrors.expiryDate = 'Expiry date must be after issue date';
+      }
+      if (Object.keys(requirementErrors).length > 0) {
+        setErrors(requirementErrors);
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        await onSaveRequirement?.({
+          requirementId,
+          issueDate: formData.issueDate!.toISOString().split('T')[0],
+          expiryDate: formData.expiryDate!.toISOString().split('T')[0],
+          documentFile: documentFile || undefined,
+        });
+        setIsSubmitting(false);
+        onOpenChange(false);
+      } catch (err: any) {
+        console.error('Failed to save requirement:', err);
+        toast({
+          title: 'Save failed',
+          description: err?.message || 'Unable to save requirement.',
+          variant: 'destructive',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      setRequirementId(selectedRequirementId || '');
+      setFormData({
+        name: '',
+        type: 'police_check',
+        issueDate: undefined,
+        expiryDate: undefined,
+      });
+      setIssueDateInput('');
+      setExpiryDateInput('');
+      setDocumentFile(null);
+      setErrors({});
+      return;
+    }
+
     // Validate form
     const result = certificationSchema.safeParse(formData);
     
@@ -265,7 +389,7 @@ export function CertificationDialog({
     };
 
     try {
-      await onSave(newCertification, documentFile || undefined);
+      await onSave?.(newCertification, documentFile || undefined);
       setIsSubmitting(false);
       onOpenChange(false);
     } catch (err: any) {
@@ -303,44 +427,86 @@ export function CertificationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Certification' : 'Add Certification'}</DialogTitle>
+          <DialogTitle>
+            {isRequirementMode
+              ? `${requirementHasDocument ? 'Edit' : 'Add'} ${requirementName || 'Requirement'}`
+              : isEditing
+              ? 'Edit Certification'
+              : 'Add Certification'}
+          </DialogTitle>
           <DialogDescription>
-            {isEditing 
+            {isRequirementMode
+              ? 'Upload a document for a compliance requirement.'
+              : isEditing 
               ? 'Update the certification details and upload a new document if needed.'
               : 'Add a new compliance certification with document upload.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Certification Type */}
-          <div className="space-y-2">
-            <Label htmlFor="cert-type">Certification Type *</Label>
-            <Select value={formData.type} onValueChange={handleTypeChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                {certificationTypes.map(type => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!isRequirementMode && (
+            <>
+              {/* Certification Type */}
+              <div className="space-y-2">
+                <Label htmlFor="cert-type">Certification Type *</Label>
+                <Select value={formData.type} onValueChange={handleTypeChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {certificationTypes.map(type => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="cert-name">Certificate Name *</Label>
-            <Input
-              id="cert-name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., National Police Certificate"
-              maxLength={100}
-            />
-            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
-          </div>
+              {/* Name */}
+              <div className="space-y-2">
+                <Label htmlFor="cert-name">Certificate Name *</Label>
+                <Input
+                  id="cert-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., National Police Certificate"
+                  maxLength={100}
+                />
+                {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+              </div>
+            </>
+          )}
+
+          {isRequirementMode && (
+            <div className="space-y-2">
+              <Label>Requirement *</Label>
+              <Select
+                value={requirementId}
+                onValueChange={(value) => {
+                  setRequirementId(value);
+                  onRequirementChange?.(value);
+                  if (errors.requirementId) {
+                    setErrors((prev) => ({ ...prev, requirementId: '' }));
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select requirement" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {requirementOptions.map((rule) => (
+                    <SelectItem key={rule.id} value={rule.id}>
+                      {rule.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.requirementId && (
+                <p className="text-xs text-destructive">{errors.requirementId}</p>
+              )}
+            </div>
+          )}
 
           {/* Issue Date */}
           <div className="space-y-2">
@@ -472,6 +638,9 @@ export function CertificationDialog({
                 </div>
               )}
             </div>
+            {errors.documentFile && (
+              <p className="text-xs text-destructive">{errors.documentFile}</p>
+            )}
             <p className="text-xs text-muted-foreground">
               Accepted formats: PDF, JPG, PNG (max 10MB)
             </p>
@@ -479,7 +648,7 @@ export function CertificationDialog({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          {isEditing && onDelete && (
+          {!isRequirementMode && isEditing && onDelete && (
             <Button 
               variant="destructive" 
               onClick={handleDelete}
@@ -497,7 +666,15 @@ export function CertificationDialog({
               disabled={isSubmitting}
               className="flex-1 sm:flex-none gradient-primary"
             >
-              {isSubmitting ? 'Saving...' : isEditing ? 'Update' : 'Add Certification'}
+              {isSubmitting
+                ? 'Saving...'
+                : isRequirementMode
+                ? requirementHasDocument
+                  ? 'Edit'
+                  : 'Add'
+                : isEditing
+                ? 'Update'
+                : 'Add Certification'}
             </Button>
           </div>
         </DialogFooter>
