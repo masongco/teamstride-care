@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Plus, AlertTriangle, CheckCircle, Pencil } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Plus, AlertTriangle, CheckCircle, Pencil, AlertCircle } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -100,6 +100,17 @@ export function EmployeeDetailSheet({
   const [complianceDocsLoading, setComplianceDocsLoading] = useState(false);
   const [addRequirementDialogOpen, setAddRequirementDialogOpen] = useState(false);
   const [selectedRequirementId, setSelectedRequirementId] = useState<string>('');
+  const [employeeNotes, setEmployeeNotes] = useState<Array<{
+    id: string;
+    interaction_type: string;
+    reason: string;
+    discussion: string;
+    outcome: string | null;
+    logged_by_user_id: string;
+    created_at: string;
+  }>>([]);
+  const [employeeNotesLoading, setEmployeeNotesLoading] = useState(false);
+  const [noteAuthors, setNoteAuthors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!employee) return;
@@ -127,6 +138,71 @@ export function EmployeeDetailSheet({
     };
 
     fetchComplianceDocs();
+    return () => {
+      isActive = false;
+    };
+  }, [employee]);
+
+  useEffect(() => {
+    if (!employee) {
+      setEmployeeNotes([]);
+      setNoteAuthors({});
+      return;
+    }
+
+    let isActive = true;
+    const fetchNotes = async () => {
+      setEmployeeNotesLoading(true);
+      const { data, error } = await supabase
+        .from('employee_interaction_notes')
+        .select('id,interaction_type,reason,discussion,outcome,logged_by_user_id,created_at')
+        .eq('employee_id', employee.id)
+        .order('created_at', { ascending: false });
+
+      if (!isActive) return;
+      if (error) {
+        console.error('Failed to load employee notes:', error);
+        setEmployeeNotes([]);
+        setNoteAuthors({});
+        setEmployeeNotesLoading(false);
+        return;
+      }
+
+      const notes = data || [];
+      setEmployeeNotes(notes);
+
+      const authorIds = Array.from(
+        new Set(notes.map((note) => note.logged_by_user_id).filter(Boolean))
+      );
+
+      if (authorIds.length === 0) {
+        setNoteAuthors({});
+        setEmployeeNotesLoading(false);
+        return;
+      }
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id,display_name')
+        .in('user_id', authorIds);
+
+      if (!isActive) return;
+      if (profilesError) {
+        console.error('Failed to load note authors:', profilesError);
+        setNoteAuthors({});
+      } else {
+        const authorMap: Record<string, string> = {};
+        (profilesData || []).forEach((profile) => {
+          if (profile.user_id) {
+            authorMap[profile.user_id] = profile.display_name || profile.user_id;
+          }
+        });
+        setNoteAuthors(authorMap);
+      }
+      setEmployeeNotesLoading(false);
+    };
+
+    fetchNotes();
     return () => {
       isActive = false;
     };
@@ -240,10 +316,10 @@ export function EmployeeDetailSheet({
       }
 
       return {
-        type: 'compliant' as const,
+        type: 'no_expiry' as const,
         label: 'Expiry date not set',
-        icon: CheckCircle,
-        className: 'bg-success/10 text-success',
+        icon: AlertCircle,
+        className: 'bg-warning/10 text-warning',
       };
     }
 
@@ -266,9 +342,9 @@ export function EmployeeDetailSheet({
         };
       }
       return {
-        type: 'pending' as const,
+        type: 'no_expiry' as const,
         label: 'Expiry date not set',
-        icon: Clock,
+        icon: AlertCircle,
         className: 'bg-warning/10 text-warning',
       };
     }
@@ -308,7 +384,13 @@ export function EmployeeDetailSheet({
     return isValid(parsed) ? format(parsed, 'MMM d, yyyy') : 'Not set';
   };
 
-  const getStatusIcon = (status: ComplianceStatus) => {
+  const formatDateTimeOrDash = (value?: string | null) => {
+    if (!value) return 'Not set';
+    const parsed = new Date(value);
+    return isValid(parsed) ? format(parsed, 'MMM d, yyyy h:mm a') : 'Not set';
+  };
+
+  const getStatusIcon = (status: ComplianceStatus | 'no_expiry') => {
     switch (status) {
       case 'expired':
         return <AlertTriangle className="h-4 w-4 text-destructive" />;
@@ -316,6 +398,8 @@ export function EmployeeDetailSheet({
         return <Clock className="h-4 w-4 text-warning" />;
       case 'compliant':
         return <CheckCircle className="h-4 w-4 text-success" />;
+      case 'no_expiry':
+        return <AlertCircle className="h-4 w-4 text-warning" />;
       case 'pending':
         return <Clock className="h-4 w-4 text-muted-foreground" />;
     }
@@ -546,10 +630,17 @@ export function EmployeeDetailSheet({
     }
   };
 
-  // Calculate compliance percentage
-  const totalCerts = employee.certifications.length;
-  const validCerts = employee.certifications.filter(c => c.status === 'compliant').length;
-  const compliancePercentage = totalCerts > 0 ? Math.round((validCerts / totalCerts) * 100) : 0;
+  // Calculate compliance percentage based on required compliance docs (missing + expired count as non-compliant)
+  const totalRequirements = requiredComplianceChecklist.length;
+  const missingOrExpiredCount = requiredComplianceChecklist.filter((item) => {
+    if (!item.document) return true;
+    const status = getRequirementStatus(item.document);
+    return status.type === 'expired';
+  }).length;
+  const compliancePercentage =
+    totalRequirements > 0
+      ? Math.round(((totalRequirements - missingOrExpiredCount) / totalRequirements) * 100)
+      : 0;
 
   const buildEditData = (emp: Employee): Partial<Employee> => ({
     firstName: emp.firstName,
@@ -1032,12 +1123,14 @@ export function EmployeeDetailSheet({
                     <div className="space-y-2">
                       {requiredComplianceChecklist.map((item) => {
                           const status = getRequirementStatus(item.document);
-                          const statusForIcon: ComplianceStatus =
+                          const statusForIcon: ComplianceStatus | 'no_expiry' =
                             status.type === 'expired' || status.type === 'rejected'
                               ? 'expired'
                               : status.type === 'expiring'
                               ? 'expiring'
-                              : status.type === 'pending' || status.type === 'missing'
+                              : status.type === 'no_expiry'
+                              ? 'no_expiry'
+                              : status.type === 'missing'
                               ? 'pending'
                               : 'compliant';
                           const hasDocument = Boolean(item.document);
@@ -1050,8 +1143,8 @@ export function EmployeeDetailSheet({
                                 status.type === 'expiring' && "border-warning/50 bg-warning/5",
                                 status.type === 'compliant' && "border-success/50 bg-success/5",
                                 status.type === 'rejected' && "border-destructive/50 bg-destructive/5",
-                                status.type === 'pending' && "border-muted",
-                                status.type === 'missing' && "border-muted"
+                                status.type === 'missing' && "border-muted",
+                                status.type === 'no_expiry' && "border-warning/50 bg-warning/5"
                               )}
                               onClick={() => handleOpenRequirementDialog(item.rule.id)}
                             >
@@ -1246,6 +1339,61 @@ export function EmployeeDetailSheet({
                 </div>
                 </div>
 
+                {/* Notes */}
+                <Separator />
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Notes
+                  </h3>
+                  {employeeNotesLoading ? (
+                    <div className="text-xs text-muted-foreground">Loading notes...</div>
+                  ) : employeeNotes.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No notes logged.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {employeeNotes.map((note) => (
+                        <div key={note.id} className="rounded-lg border p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {note.interaction_type === 'call'
+                                    ? 'Phone call'
+                                    : note.interaction_type === 'text'
+                                    ? 'Text message'
+                                    : note.interaction_type === 'email'
+                                    ? 'Email'
+                                    : 'Note'}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDateTimeOrDash(note.created_at)}
+                                </span>
+                              </div>
+                              <p className="text-sm font-medium mt-1">{note.reason}</p>
+                              <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">
+                                {note.discussion}
+                              </p>
+                              {note.outcome ? (
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  <span className="font-medium text-foreground">Outcome:</span>{' '}
+                                  {note.outcome}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                              Logged by{' '}
+                              {noteAuthors[note.logged_by_user_id] ||
+                                note.logged_by_user_id ||
+                                'Unknown'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Emergency Contact */}
                 {employee.emergencyContact && (
                   <>
@@ -1281,18 +1429,7 @@ export function EmployeeDetailSheet({
                 Save Changes
               </Button>
             </>
-          ) : (
-            <>
-              <Button variant="outline" className="flex-1" onClick={handleStartEdit}>
-                <Edit2 className="h-4 w-4 mr-2" />
-                Edit Profile
-              </Button>
-              <Button variant="outline" className="flex-1">
-                <Mail className="h-4 w-4 mr-2" />
-                Send Email
-              </Button>
-            </>
-          )}
+          ) : null}
         </div>
       </SheetContent>
 
@@ -1310,6 +1447,8 @@ export function EmployeeDetailSheet({
         requirementHasDocument={Boolean(selectedRequirementDoc)}
         requirementIssueDate={selectedRequirementDoc?.issue_date || null}
         requirementExpiryDate={selectedRequirementDoc?.expiry_date || null}
+        requirementDocumentName={selectedRequirementDoc?.file_name || null}
+        requirementDocumentUrl={selectedRequirementDoc?.file_url || null}
         onSaveRequirement={handleRequirementDialogSubmit}
       />
     </Sheet>

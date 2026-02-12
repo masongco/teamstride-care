@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { StatusBadge } from '@/components/ui/status-badge';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -120,6 +120,16 @@ function dbEmployeeDocToDocument(doc: EmployeeDocumentRow): Document {
     type: 'other',
     uploadedAt: doc.created_at,
     url: doc.file_url,
+  };
+}
+
+function getCertificationStats(certifications: Certification[]) {
+  return {
+    total: certifications.length,
+    compliant: certifications.filter((c) => c.status === 'compliant').length,
+    expiring: certifications.filter((c) => c.status === 'expiring').length,
+    expired: certifications.filter((c) => c.status === 'expired').length,
+    pending: certifications.filter((c) => c.status === 'pending').length,
   };
 }
 
@@ -1300,7 +1310,38 @@ export default function Employees() {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Compliance</span>
-                    <StatusBadge status={employee.complianceStatus} size="sm" />
+                    <div className="flex items-center gap-1 justify-end">
+                      {(() => {
+                        const stats = getCertificationStats(employee.certifications);
+                        return (
+                          <>
+                            {stats.compliant > 0 && (
+                              <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/20">
+                                {stats.compliant} ✓
+                              </Badge>
+                            )}
+                            {stats.expiring > 0 && (
+                              <Badge variant="outline" className="text-xs bg-warning/10 text-warning border-warning/20">
+                                {stats.expiring} ⚠
+                              </Badge>
+                            )}
+                            {stats.expired > 0 && (
+                              <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/20">
+                                {stats.expired} ✗
+                              </Badge>
+                            )}
+                            {stats.pending > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                {stats.pending} pending
+                              </Badge>
+                            )}
+                            {stats.total === 0 && (
+                              <span className="text-xs text-muted-foreground">No certifications</span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Pay Rate</span>
@@ -1379,7 +1420,38 @@ export default function Employees() {
                     <span className="text-muted-foreground">
                       {employee.department || 'Not assigned'}
                     </span>
-                    <StatusBadge status={employee.complianceStatus} size="sm" />
+                    <div className="flex items-center gap-1">
+                      {(() => {
+                        const stats = getCertificationStats(employee.certifications);
+                        return (
+                          <>
+                            {stats.compliant > 0 && (
+                              <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/20">
+                                {stats.compliant} ✓
+                              </Badge>
+                            )}
+                            {stats.expiring > 0 && (
+                              <Badge variant="outline" className="text-xs bg-warning/10 text-warning border-warning/20">
+                                {stats.expiring} ⚠
+                              </Badge>
+                            )}
+                            {stats.expired > 0 && (
+                              <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/20">
+                                {stats.expired} ✗
+                              </Badge>
+                            )}
+                            {stats.pending > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                {stats.pending} pending
+                              </Badge>
+                            )}
+                            {stats.total === 0 && (
+                              <span className="text-xs text-muted-foreground">No certifications</span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                     <span className="font-medium">${(employee.payRate || 0).toFixed(2)}/hr</span>
                   </div>
 

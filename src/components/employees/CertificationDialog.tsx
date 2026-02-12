@@ -59,6 +59,8 @@ interface CertificationDialogProps {
   requirementHasDocument?: boolean;
   requirementIssueDate?: string | null;
   requirementExpiryDate?: string | null;
+  requirementDocumentName?: string | null;
+  requirementDocumentUrl?: string | null;
   onSaveRequirement?: (payload: {
     requirementId: string;
     issueDate: string;
@@ -103,6 +105,8 @@ export function CertificationDialog({
   requirementHasDocument,
   requirementIssueDate,
   requirementExpiryDate,
+  requirementDocumentName,
+  requirementDocumentUrl,
   onSaveRequirement,
 }: CertificationDialogProps) {
   const isRequirementMode = mode === 'requirement';
@@ -481,27 +485,7 @@ export function CertificationDialog({
           {isRequirementMode && (
             <div className="space-y-2">
               <Label>Requirement *</Label>
-              <Select
-                value={requirementId}
-                onValueChange={(value) => {
-                  setRequirementId(value);
-                  onRequirementChange?.(value);
-                  if (errors.requirementId) {
-                    setErrors((prev) => ({ ...prev, requirementId: '' }));
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select requirement" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {requirementOptions.map((rule) => (
-                    <SelectItem key={rule.id} value={rule.id}>
-                      {rule.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input value={requirementName || ''} readOnly />
               {errors.requirementId && (
                 <p className="text-xs text-destructive">{errors.requirementId}</p>
               )}
@@ -614,6 +598,40 @@ export function CertificationDialog({
                   >
                     <X className="h-4 w-4" />
                   </Button>
+                </div>
+              ) : requirementDocumentName ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Upload className="h-4 w-4 text-muted-foreground" />
+                    <span className="truncate max-w-[200px]">{requirementDocumentName}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {requirementDocumentUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          window.open(requirementDocumentUrl, '_blank', 'noopener,noreferrer')
+                        }
+                      >
+                        View
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Replace
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="text-center">

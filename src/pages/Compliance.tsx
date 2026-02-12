@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
-import { Search, Filter, AlertTriangle, CheckCircle, XCircle, Clock, Download, Upload, Users, FileCheck, ChevronDown, X, Loader2 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, AlertTriangle, CheckCircle, XCircle, Clock, Download, Users, FileCheck, ChevronDown, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -30,11 +30,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSupabaseEmployees } from '@/hooks/useSupabaseEmployees';
-import { useComplianceRules } from '@/hooks/useDocuments';
-import { format, parseISO, differenceInDays } from 'date-fns';
+import { useComplianceRules, useDocumentTypes } from '@/hooks/useDocuments';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { ComplianceStatus } from '@/types/hrms';
+import { supabase } from '@/integrations/supabase/client';
+import { ComplianceEmployeeDetailDialog } from '@/components/compliance/ComplianceEmployeeDetailDialog';
 import type { ComplianceRule } from '@/types/portal';
 import type { EmployeeDB, EmployeeCertificationDB, ComplianceStatusDB } from '@/types/database';
 
@@ -47,12 +49,12 @@ const certTypeLabels: Record<string, string> = {
   other: 'Other',
 };
 
-const statusColors: Record<string, string> = {
-  compliant: 'bg-success text-success-foreground',
-  expiring: 'bg-warning text-warning-foreground',
-  expired: 'bg-destructive text-destructive-foreground',
-  pending: 'bg-muted text-muted-foreground',
-};
+function isUuid(value?: string | null) {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
 
 // Transform DB employee with certifications for display
 interface EmployeeWithCerts extends EmployeeDB {
@@ -71,9 +73,18 @@ function deriveComplianceStatus(certs: EmployeeCertificationDB[]): ComplianceSta
 export default function Compliance() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
-  const [filterCertType, setFilterCertType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [activeView, setActiveView] = useState<'certifications' | 'employees' | 'requirements'>('certifications');
+  const [activeView, setActiveView] = useState<'employees' | 'requirements'>('employees');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [selectedEmployeeDocs, setSelectedEmployeeDocs] = useState<Array<{
+    id: string;
+    document_type_id: string;
+    file_name: string;
+    file_url: string | null;
+    expiry_date: string | null;
+    created_at: string;
+  }>>([]);
+  const [selectedEmployeeDocsLoading, setSelectedEmployeeDocsLoading] = useState(false);
 
   // Use Supabase data exclusively - no localStorage fallback
   const { 
@@ -84,6 +95,33 @@ export default function Compliance() {
     error 
   } = useSupabaseEmployees();
   const { rules: complianceRules, loading: complianceRulesLoading } = useComplianceRules();
+  const { documentTypes } = useDocumentTypes();
+
+  const complianceDocumentTypeIds = useMemo(
+    () =>
+      new Set(
+        documentTypes
+          .filter((docType) => (docType.category || 'Document') === 'Compliance')
+          .map((docType) => docType.id)
+      ),
+    [documentTypes]
+  );
+  const complianceDocumentTypes = useMemo(
+    () =>
+      documentTypes
+        .filter((docType) => (docType.category || 'Document') === 'Compliance')
+        .map((docType) => ({ id: docType.id, name: docType.name })),
+    [documentTypes]
+  );
+  const documentTypeNameById = useMemo(
+    () => new Map(documentTypes.map((docType) => [docType.id, docType.name])),
+    [documentTypes]
+  );
+  const getCertTypeLabel = (type: string, documentTypeId?: string | null) => {
+    const resolvedId = documentTypeId || (isUuid(type) ? type : null);
+    const mapped = resolvedId ? documentTypeNameById.get(resolvedId) : undefined;
+    return mapped || certTypeLabels[type] || type;
+  };
 
   // Combine employees with their certifications and filter out inactive
   const activeEmployees = useMemo(() => {
@@ -105,11 +143,6 @@ export default function Compliance() {
     [activeEmployees]
   );
 
-  const certTypes = useMemo(() => 
-    [...new Set(dbCertifications.map((c) => c.type))].sort(),
-    [dbCertifications]
-  );
-
   // Calculate compliance stats from Supabase data
   const stats = useMemo(() => ({
     compliant: activeEmployees.filter((e) => e.compliance_status === 'compliant').length,
@@ -125,59 +158,66 @@ export default function Compliance() {
   // Get all certifications with employee info
   const allCertifications = useMemo(() => 
     activeEmployees.flatMap((employee) =>
-      employee.certifications.map((cert) => ({
-        id: cert.id,
-        name: cert.name,
-        type: cert.type,
-        issueDate: cert.issue_date || '',
-        expiryDate: cert.expiry_date || '',
-        status: cert.status,
-        employeeId: employee.id,
-        employeeName: `${employee.first_name} ${employee.last_name}`,
-        employeeInitials: `${employee.first_name[0] || ''}${employee.last_name[0] || ''}`,
-        department: employee.department || 'Unassigned',
-      }))
+      employee.certifications.map((cert) => {
+        const docTypeId = (cert as any).document_type_id as string | null | undefined;
+        const resolvedDocTypeId = docTypeId || (isUuid(cert.type) ? cert.type : null);
+        return {
+          id: cert.id,
+          name: cert.name,
+          type: cert.type,
+          documentTypeId: resolvedDocTypeId,
+          issueDate: cert.issue_date || '',
+          expiryDate: cert.expiry_date || '',
+          status: cert.status,
+          employeeId: employee.id,
+          employeeName: `${employee.first_name} ${employee.last_name}`,
+          employeeInitials: `${employee.first_name[0] || ''}${employee.last_name[0] || ''}`,
+          department: employee.department || 'Unassigned',
+        };
+      })
     ),
     [activeEmployees]
   );
 
   // Certification type statistics
   const certTypeStats = useMemo(() => {
-    const statsMap: Record<string, { total: number; compliant: number; expiring: number; expired: number; pending: number }> = {};
+    const statsMap: Record<string, { total: number; compliant: number; expiring: number; expired: number; pending: number; labelType: string; documentTypeId: string | null }> = {};
+
+    documentTypes
+      .filter((docType) => (docType.category || 'Document') === 'Compliance')
+      .forEach((docType) => {
+        statsMap[docType.id] = {
+          total: 0,
+          compliant: 0,
+          expiring: 0,
+          expired: 0,
+          pending: 0,
+          labelType: docType.name,
+          documentTypeId: docType.id,
+        };
+      });
     
     allCertifications.forEach((cert) => {
-      if (!statsMap[cert.type]) {
-        statsMap[cert.type] = { total: 0, compliant: 0, expiring: 0, expired: 0, pending: 0 };
+      if (!cert.documentTypeId || !statsMap[cert.documentTypeId]) {
+        return;
       }
-      statsMap[cert.type].total++;
-      const status = cert.status as keyof typeof statsMap[string];
-      if (status in statsMap[cert.type]) {
-        statsMap[cert.type][status]++;
-      }
+      const key = cert.documentTypeId;
+      statsMap[key].total++;
+      if (cert.status === 'compliant') statsMap[key].compliant++;
+      if (cert.status === 'expiring') statsMap[key].expiring++;
+      if (cert.status === 'expired') statsMap[key].expired++;
+      if (cert.status === 'pending') statsMap[key].pending++;
     });
 
-    return Object.entries(statsMap).map(([type, data]) => ({
-      type,
-      label: certTypeLabels[type] || type,
-      ...data,
-      complianceRate: data.total > 0 ? Math.round((data.compliant / data.total) * 100) : 0,
-    }));
-  }, [allCertifications]);
-
-  // Filter certifications
-  const filteredCertifications = useMemo(() => 
-    allCertifications.filter((cert) => {
-      const matchesSearch = 
-        cert.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        cert.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDepartment = filterDepartment === 'all' || cert.department === filterDepartment;
-      const matchesCertType = filterCertType === 'all' || cert.type === filterCertType;
-      const matchesStatus = filterStatus === 'all' || cert.status === filterStatus;
-      
-      return matchesSearch && matchesDepartment && matchesCertType && matchesStatus;
-    }),
-    [allCertifications, searchQuery, filterDepartment, filterCertType, filterStatus]
-  );
+    return Object.entries(statsMap)
+      .map(([type, data]) => ({
+        type,
+        label: getCertTypeLabel(data.labelType, data.documentTypeId),
+        ...data,
+        complianceRate: data.total > 0 ? Math.round((data.compliant / data.total) * 100) : 0,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allCertifications, documentTypeNameById, complianceDocumentTypeIds, documentTypes]);
 
   // Filter employees
   const filteredEmployees = useMemo(() => 
@@ -194,50 +234,53 @@ export default function Compliance() {
 
   const filteredRequirements = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return complianceRules;
-    return complianceRules.filter((rule) => {
+    const complianceOnly = complianceRules.filter(
+      (rule) => (rule.document_type?.category || 'Document') === 'Compliance'
+    );
+    if (!query) return complianceOnly;
+    return complianceOnly.filter((rule) => {
       const docName = rule.document_type?.name?.toLowerCase() || '';
       return docName.includes(query);
     });
   }, [complianceRules, searchQuery]);
 
+  const selectedEmployee = useMemo(
+    () => activeEmployees.find((emp) => emp.id === selectedEmployeeId) || null,
+    [activeEmployees, selectedEmployeeId]
+  );
+
+  useEffect(() => {
+    if (activeView !== 'employees') {
+      setSelectedEmployeeId(null);
+    }
+  }, [activeView]);
+
+
+  useEffect(() => {
+    const fetchDocs = async () => {
+      if (!selectedEmployeeId) {
+        setSelectedEmployeeDocs([]);
+        return;
+      }
+      setSelectedEmployeeDocsLoading(true);
+      const { data, error } = await supabase
+        .from('employee_documents')
+        .select('id,document_type_id,file_name,file_url,expiry_date,created_at')
+        .eq('user_id', selectedEmployeeId)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Failed to load employee documents:', error);
+        setSelectedEmployeeDocs([]);
+      } else {
+        setSelectedEmployeeDocs(data || []);
+      }
+      setSelectedEmployeeDocsLoading(false);
+    };
+
+    fetchDocs();
+  }, [selectedEmployeeId]);
+
   // Export functionality
-  const handleExportCSV = () => {
-    const headers = ['Employee', 'Department', 'Certification', 'Type', 'Issue Date', 'Expiry Date', 'Status', 'Days Remaining'];
-    
-    const rows = filteredCertifications.map((cert) => {
-      const daysRemaining = cert.expiryDate 
-        ? differenceInDays(parseISO(cert.expiryDate), new Date())
-        : 'N/A';
-      
-      return [
-        cert.employeeName,
-        cert.department,
-        cert.name,
-        certTypeLabels[cert.type] || cert.type,
-        cert.issueDate ? format(parseISO(cert.issueDate), 'yyyy-MM-dd') : '',
-        cert.expiryDate ? format(parseISO(cert.expiryDate), 'yyyy-MM-dd') : '',
-        cert.status,
-        daysRemaining.toString(),
-      ];
-    });
-
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${cell}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `compliance-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    link.click();
-
-    toast({
-      title: 'Report Exported',
-      description: `Exported ${filteredCertifications.length} certification records to CSV.`,
-    });
-  };
-
   const handleExportEmployeeSummary = () => {
     const headers = ['Employee', 'Department', 'Status', 'Total Certs', 'Compliant', 'Expiring', 'Expired', 'Pending'];
     
@@ -282,14 +325,13 @@ export default function Compliance() {
     setSearchQuery('');
     if (activeView !== 'requirements') {
       setFilterDepartment('all');
-      setFilterCertType('all');
       setFilterStatus('all');
     }
   };
 
   const hasActiveFilters = activeView === 'requirements'
     ? Boolean(searchQuery)
-    : Boolean(searchQuery) || filterDepartment !== 'all' || filterCertType !== 'all' || filterStatus !== 'all';
+    : Boolean(searchQuery) || filterDepartment !== 'all' || filterStatus !== 'all';
 
   // Show loading state
   if (isLoading) {
@@ -343,16 +385,12 @@ export default function Compliance() {
                 <ChevronDown className="h-4 w-4 ml-2" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-popover">
-              <DropdownMenuItem onClick={handleExportCSV}>
-                <FileCheck className="h-4 w-4 mr-2" />
-                Export Certifications (CSV)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportEmployeeSummary}>
-                <Users className="h-4 w-4 mr-2" />
-                Export Employee Summary (CSV)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+          <DropdownMenuContent align="end" className="bg-popover">
+            <DropdownMenuItem onClick={handleExportEmployeeSummary}>
+              <Users className="h-4 w-4 mr-2" />
+              Export Employee Summary (CSV)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
@@ -543,19 +581,6 @@ export default function Compliance() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={filterCertType} onValueChange={setFilterCertType}>
-                    <SelectTrigger className="w-full sm:w-48">
-                      <SelectValue placeholder="Certification Type" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="all">All Types</SelectItem>
-                      {certTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {certTypeLabels[type] || type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
                     <SelectTrigger className="w-full sm:w-40">
                       <SelectValue placeholder="Status" />
@@ -587,12 +612,6 @@ export default function Compliance() {
                     <X className="h-3 w-3 cursor-pointer" onClick={() => setFilterDepartment('all')} />
                   </Badge>
                 )}
-                {activeView !== 'requirements' && filterCertType !== 'all' && (
-                  <Badge variant="secondary" className="gap-1">
-                    {certTypeLabels[filterCertType] || filterCertType}
-                    <X className="h-3 w-3 cursor-pointer" onClick={() => setFilterCertType('all')} />
-                  </Badge>
-                )}
                 {activeView !== 'requirements' && filterStatus !== 'all' && (
                   <Badge variant="secondary" className="gap-1 capitalize">
                     {filterStatus}
@@ -613,12 +632,8 @@ export default function Compliance() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <CardTitle className="text-lg">Compliance Details</CardTitle>
-            <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'certifications' | 'employees' | 'requirements')}>
+            <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'employees' | 'requirements')}>
               <TabsList>
-                <TabsTrigger value="certifications" className="gap-2">
-                  <FileCheck className="h-4 w-4" />
-                  Certifications ({filteredCertifications.length})
-                </TabsTrigger>
                 <TabsTrigger value="employees" className="gap-2">
                   <Users className="h-4 w-4" />
                   Employees ({filteredEmployees.length})
@@ -632,10 +647,28 @@ export default function Compliance() {
           </div>
         </CardHeader>
         <CardContent>
-          {activeView === 'certifications' ? (
-            <CertificationsTable certifications={filteredCertifications} />
-          ) : activeView === 'employees' ? (
-            <EmployeesComplianceTable employees={filteredEmployees} />
+          {activeView === 'employees' ? (
+            <>
+              <EmployeesComplianceTable
+                employees={filteredEmployees}
+                selectedEmployeeId={selectedEmployeeId}
+                onSelectEmployee={setSelectedEmployeeId}
+                complianceDocumentTypes={complianceDocumentTypes}
+              />
+              <ComplianceEmployeeDetailDialog
+                open={Boolean(selectedEmployeeId)}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setSelectedEmployeeId(null);
+                  }
+                }}
+                employee={selectedEmployee}
+                documents={selectedEmployeeDocs}
+                documentsLoading={selectedEmployeeDocsLoading}
+                getCertTypeLabel={getCertTypeLabel}
+                complianceDocumentTypes={complianceDocumentTypes}
+              />
+            </>
           ) : (
             <RequirementsTable requirements={filteredRequirements} loading={complianceRulesLoading} />
           )}
@@ -645,108 +678,17 @@ export default function Compliance() {
   );
 }
 
-interface CertificationWithEmployee {
-  id: string;
-  name: string;
-  type: string;
-  issueDate: string;
-  expiryDate: string;
-  status: ComplianceStatusDB;
-  employeeId: string;
-  employeeName: string;
-  employeeInitials: string;
-  department: string;
-}
-
-function CertificationsTable({ certifications }: { certifications: CertificationWithEmployee[] }) {
-  return (
-    <div className="rounded-lg border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead>Employee</TableHead>
-            <TableHead>Department</TableHead>
-            <TableHead>Certification</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Expiry Date</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {certifications.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                No certifications found matching your filters
-              </TableCell>
-            </TableRow>
-          ) : (
-            certifications.map((cert) => {
-              const daysUntilExpiry = cert.expiryDate
-                ? differenceInDays(parseISO(cert.expiryDate), new Date())
-                : null;
-
-              return (
-                <TableRow key={cert.id} className="table-row-interactive">
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                          {cert.employeeInitials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium">{cert.employeeName}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">{cert.department}</span>
-                  </TableCell>
-                  <TableCell>{cert.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {certTypeLabels[cert.type] || cert.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {cert.expiryDate ? (
-                      <div>
-                        <span className="text-sm">
-                          {format(parseISO(cert.expiryDate), 'dd MMM yyyy')}
-                        </span>
-                        {daysUntilExpiry !== null && (
-                          <span
-                            className={cn(
-                              'text-xs block',
-                              daysUntilExpiry < 0
-                                ? 'text-destructive'
-                                : daysUntilExpiry < 30
-                                ? 'text-warning'
-                                : 'text-muted-foreground'
-                            )}
-                          >
-                            {daysUntilExpiry < 0
-                              ? `${Math.abs(daysUntilExpiry)} days overdue`
-                              : `${daysUntilExpiry} days remaining`}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">Pending</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={cert.status as ComplianceStatus} size="sm" />
-                  </TableCell>
-                </TableRow>
-              );
-            })
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function EmployeesComplianceTable({ employees }: { employees: EmployeeWithCerts[] }) {
+function EmployeesComplianceTable({
+  employees,
+  selectedEmployeeId,
+  onSelectEmployee,
+  complianceDocumentTypes,
+}: {
+  employees: EmployeeWithCerts[];
+  selectedEmployeeId: string | null;
+  onSelectEmployee: (employeeId: string) => void;
+  complianceDocumentTypes: Array<{ id: string; name: string }>;
+}) {
   return (
     <div className="rounded-lg border overflow-hidden">
       <Table>
@@ -775,12 +717,41 @@ function EmployeesComplianceTable({ employees }: { employees: EmployeeWithCerts[
                 expired: employee.certifications.filter((c) => c.status === 'expired').length,
                 pending: employee.certifications.filter((c) => c.status === 'pending').length,
               };
-              const compliancePercent = certStats.total > 0 
-                ? Math.round((certStats.compliant / certStats.total) * 100) 
-                : 0;
+              const requirementIds = complianceDocumentTypes.map((docType) => docType.id);
+              const certByDocType = new Map<string, EmployeeCertificationDB>();
+              employee.certifications.forEach((cert) => {
+                const docTypeId =
+                  (cert as any).document_type_id || (isUuid(cert.type) ? cert.type : null);
+                if (docTypeId && !certByDocType.has(docTypeId)) {
+                  certByDocType.set(docTypeId, cert);
+                }
+              });
+              const missingOrExpiredCount = requirementIds.filter((docTypeId) => {
+                const cert = certByDocType.get(docTypeId);
+                if (!cert) return true;
+                if (cert.status === 'expired') return true;
+                if (cert.expiry_date) {
+                  const expiryDate = new Date(cert.expiry_date);
+                  if (expiryDate.getTime() < Date.now()) return true;
+                }
+                return false;
+              }).length;
+              const compliancePercent =
+                requirementIds.length > 0
+                  ? Math.round(
+                      ((requirementIds.length - missingOrExpiredCount) / requirementIds.length) * 100
+                    )
+                  : 0;
 
               return (
-                <TableRow key={employee.id} className="table-row-interactive">
+                <TableRow
+                  key={employee.id}
+                  className={cn(
+                    "table-row-interactive cursor-pointer",
+                    selectedEmployeeId === employee.id && "bg-muted/60"
+                  )}
+                  onClick={() => onSelectEmployee(employee.id)}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">

@@ -1021,6 +1021,67 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_interaction_notes: {
+        Row: {
+          created_at: string
+          discussion: string
+          employee_id: string
+          id: string
+          interaction_type: Database["public"]["Enums"]["interaction_type"]
+          logged_by_user_id: string
+          organisation_id: string
+          outcome: string | null
+          reason: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discussion: string
+          employee_id: string
+          id?: string
+          interaction_type: Database["public"]["Enums"]["interaction_type"]
+          logged_by_user_id: string
+          organisation_id: string
+          outcome?: string | null
+          reason: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discussion?: string
+          employee_id?: string
+          id?: string
+          interaction_type?: Database["public"]["Enums"]["interaction_type"]
+          logged_by_user_id?: string
+          organisation_id?: string
+          outcome?: string | null
+          reason?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_interaction_notes_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_interaction_notes_logged_by_user_id_fkey"
+            columns: ["logged_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_interaction_notes_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           avatar_url: string | null
@@ -3248,6 +3309,7 @@ export type Database = {
         | "performance"
         | "complaint"
       hr_note_visibility: "standard" | "restricted"
+      interaction_type: "email" | "call" | "text" | "note"
       module_type: "video" | "pdf" | "policy" | "quiz"
       org_document_category:
         | "contract_template"
