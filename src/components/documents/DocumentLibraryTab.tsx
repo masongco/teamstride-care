@@ -29,7 +29,7 @@ import {
   FileSignature
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useOrgDocuments } from '@/hooks/useOrgDocuments';
+import { useDocumentDistributions, useOrgDocuments } from '@/hooks/useOrgDocuments';
 import { DocumentDetailSheet } from './DocumentDetailSheet';
 import { DistributeDocumentDialog } from './DistributeDocumentDialog';
 import type { Database } from '@/integrations/supabase/types';
@@ -38,6 +38,9 @@ type OrgDocument = Database['public']['Tables']['org_documents']['Row'];
 
 interface DocumentLibraryTabProps {
   searchQuery: string;
+  categoryFilter: string;
+  requirementFilter: 'all' | 'ack' | 'sign' | 'none';
+  employeeFilter: string;
 }
 
 const categoryLabels: Record<string, string> = {
@@ -58,17 +61,45 @@ const categoryColors: Record<string, string> = {
   other: 'bg-gray-100 text-gray-800',
 };
 
-export function DocumentLibraryTab({ searchQuery }: DocumentLibraryTabProps) {
+export function DocumentLibraryTab({
+  searchQuery,
+  categoryFilter,
+  requirementFilter,
+  employeeFilter,
+}: DocumentLibraryTabProps) {
   const { documents, loading, deleteDocument } = useOrgDocuments();
+  const { distributions } = useDocumentDistributions();
   const [selectedDocument, setSelectedDocument] = useState<OrgDocument | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [distributeOpen, setDistributeOpen] = useState(false);
 
-  const filteredDocuments = documents.filter(doc =>
-    doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doc.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    categoryLabels[doc.category]?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const employeeDocIds = employeeFilter === 'all'
+    ? null
+    : new Set(
+        distributions
+          .filter((dist) => dist.recipient_email === employeeFilter)
+          .map((dist) => dist.org_document_id)
+      );
+
+  const filteredDocuments = documents.filter((doc) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      doc.title.toLowerCase().includes(q) ||
+      doc.description?.toLowerCase().includes(q) ||
+      categoryLabels[doc.category]?.toLowerCase().includes(q);
+
+    const matchesCategory = categoryFilter === 'all' || doc.category === categoryFilter;
+
+    const matchesRequirement =
+      requirementFilter === 'all' ||
+      (requirementFilter === 'ack' && doc.requires_acknowledgment) ||
+      (requirementFilter === 'sign' && doc.requires_signature) ||
+      (requirementFilter === 'none' && !doc.requires_acknowledgment && !doc.requires_signature);
+
+    const matchesEmployee = !employeeDocIds || employeeDocIds.has(doc.id);
+
+    return matchesSearch && matchesCategory && matchesRequirement && matchesEmployee;
+  });
 
   const handleView = (doc: OrgDocument) => {
     setSelectedDocument(doc);

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Plus, AlertTriangle, CheckCircle, Pencil, AlertCircle } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Briefcase, Shield, FileText, Clock, Edit2, Save, X, Plus, AlertTriangle, CheckCircle, Pencil, AlertCircle, FileSignature } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -24,13 +24,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CertificationDialog } from '@/components/employees/CertificationDialog';
+import { CreateContractDialog } from '@/components/contracts/CreateContractDialog';
+import { ContractSigningDialog } from '@/components/contracts/ContractSigningDialog';
+import { ContractViewSheet } from '@/components/contracts/ContractViewSheet';
 import { Employee, EmploymentType, Document, Certification, ComplianceStatus } from '@/types/hrms';
 import type { AwardClassification } from '@/hooks/useSettings';
 import { format, differenceInDays, isValid, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useComplianceRules, useDocumentTypes } from '@/hooks/useDocuments';
+import { useContracts } from '@/hooks/useContracts';
+import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
+import type { Contract, ContractAuditLog, Signature } from '@/types/contracts';
 
 interface EmployeeDetailSheetProps {
   employee: Employee | null;
@@ -38,6 +44,7 @@ interface EmployeeDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   onUpdate?: (updatedEmployee: Employee) => void;
   awardClassifications?: AwardClassification[];
+  notesRefreshKey?: number;
   onSaveCertification?: (
     certification: Certification,
     documentFile: File | undefined,
@@ -64,12 +71,29 @@ const employmentTypeColors: Record<EmploymentType, string> = {
   contractor: 'bg-warning/10 text-warning',
 };
 
+const contractStatusLabels: Record<Contract['status'], string> = {
+  draft: 'Draft',
+  pending_signature: 'Pending Signature',
+  signed: 'Signed',
+  expired: 'Expired',
+  voided: 'Voided',
+};
+
+const contractStatusClasses: Record<Contract['status'], string> = {
+  draft: 'bg-muted text-muted-foreground',
+  pending_signature: 'bg-warning/10 text-warning',
+  signed: 'bg-success/10 text-success',
+  expired: 'bg-destructive/10 text-destructive',
+  voided: 'bg-muted text-muted-foreground',
+};
+
 export function EmployeeDetailSheet({
   employee,
   open,
   onOpenChange,
   onUpdate,
   awardClassifications = [],
+  notesRefreshKey = 0,
   onUploadDocument,
 }: EmployeeDetailSheetProps) {
   const NO_AWARD_VALUE = '__none__';
@@ -95,7 +119,7 @@ export function EmployeeDetailSheet({
     file_url: string | null;
     file_name: string;
     created_at: string;
-    document_type?: { name: string | null; category?: string | null };
+    document_type?: { name: string | null; category?: string | null; is_required?: boolean | null };
   }>>([]);
   const [complianceDocsLoading, setComplianceDocsLoading] = useState(false);
   const [addRequirementDialogOpen, setAddRequirementDialogOpen] = useState(false);
@@ -111,6 +135,43 @@ export function EmployeeDetailSheet({
   }>>([]);
   const [employeeNotesLoading, setEmployeeNotesLoading] = useState(false);
   const [noteAuthors, setNoteAuthors] = useState<Record<string, string>>({});
+  const [createContractOpen, setCreateContractOpen] = useState(false);
+  const [signingDialogOpen, setSigningDialogOpen] = useState(false);
+  const [viewSheetOpen, setViewSheetOpen] = useState(false);
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+  const [selectedSignature, setSelectedSignature] = useState<Signature | null>(null);
+  const [selectedAuditLogs, setSelectedAuditLogs] = useState<ContractAuditLog[]>([]);
+
+  const { contracts, createContract, signContract, getSignature, getAuditLogs, logAuditEvent } = useContracts();
+  const { isAdmin, isManager } = useUserRole();
+  const canManageContracts = !!(isAdmin || isManager);
+  const employeeContracts = useMemo(() => {
+    if (!employee?.email) return [];
+    const email = employee.email.toLowerCase();
+    return contracts.filter((contract) => contract.employee_email?.toLowerCase() === email);
+  }, [contracts, employee?.email]);
+
+  const handleViewContract = async (contract: Contract) => {
+    setSelectedContract(contract);
+    setViewSheetOpen(true);
+
+    try {
+      const [signature, logs] = await Promise.all([
+        getSignature(contract.id),
+        getAuditLogs(contract.id),
+      ]);
+      setSelectedSignature(signature);
+      setSelectedAuditLogs(logs);
+      await logAuditEvent(contract.id, 'viewed');
+    } catch (error) {
+      console.error('Failed to load contract details:', error);
+    }
+  };
+
+  const handleSignContract = (contract: Contract) => {
+    setSelectedContract(contract);
+    setSigningDialogOpen(true);
+  };
 
   useEffect(() => {
     if (!employee) return;
@@ -121,7 +182,7 @@ export function EmployeeDetailSheet({
         setComplianceDocsLoading(true);
         const { data, error } = await supabase
           .from('employee_documents')
-          .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category)')
+          .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category,is_required)')
           .eq('user_id', employee.id)
           .order('created_at', { ascending: false });
 
@@ -183,8 +244,8 @@ export function EmployeeDetailSheet({
 
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id,display_name')
-        .in('user_id', authorIds);
+        .select('id,display_name')
+        .in('id', authorIds);
 
       if (!isActive) return;
       if (profilesError) {
@@ -193,8 +254,8 @@ export function EmployeeDetailSheet({
       } else {
         const authorMap: Record<string, string> = {};
         (profilesData || []).forEach((profile) => {
-          if (profile.user_id) {
-            authorMap[profile.user_id] = profile.display_name || profile.user_id;
+          if (profile.id) {
+            authorMap[profile.id] = profile.display_name || profile.id;
           }
         });
         setNoteAuthors(authorMap);
@@ -206,16 +267,23 @@ export function EmployeeDetailSheet({
     return () => {
       isActive = false;
     };
-  }, [employee]);
+  }, [employee, notesRefreshKey]);
   const requiredComplianceRules = useMemo(() => {
     if (!employee) return [];
     const roleName = employee.position?.toLowerCase() || '';
     const departmentName = employee.department || '';
+    const complianceDocsOnly = complianceDocs.filter(
+      (doc) => (doc.document_type?.category || 'Document') === 'Compliance',
+    );
+    const complianceDocTypeIds = new Set(complianceDocsOnly.map((doc) => doc.document_type_id));
 
     return complianceRules.filter((rule) => {
       if (!rule.is_required) return false;
       const category = rule.document_type?.category || 'Document';
       if (category !== 'Compliance') return false;
+      if (rule.document_type?.is_required === false) {
+        return complianceDocTypeIds.has(rule.document_type_id);
+      }
       if (rule.target_type === 'all') return true;
       if (rule.target_type === 'role') {
         return (rule.target_value || '').toLowerCase() === roleName;
@@ -225,7 +293,7 @@ export function EmployeeDetailSheet({
       }
       return false;
     });
-  }, [complianceRules, employee]);
+  }, [complianceRules, complianceDocs, employee]);
 
   const requiredComplianceChecklist = useMemo(() => {
     const complianceDocsOnly = complianceDocs.filter(
@@ -240,6 +308,18 @@ export function EmployeeDetailSheet({
         document: match || null,
       };
     });
+  }, [complianceDocs, requiredComplianceRules]);
+
+  const optionalComplianceDocs = useMemo(() => {
+    const complianceDocsOnly = complianceDocs.filter(
+      (doc) => (doc.document_type?.category || 'Document') === 'Compliance',
+    );
+    const requiredTypeIds = new Set(requiredComplianceRules.map((rule) => rule.document_type_id));
+    return complianceDocsOnly.filter(
+      (doc) =>
+        !requiredTypeIds.has(doc.document_type_id) &&
+        doc.document_type?.is_required !== true,
+    );
   }, [complianceDocs, requiredComplianceRules]);
 
   const documentCategoryDocs = useMemo(
@@ -442,7 +522,7 @@ export function EmployeeDetailSheet({
         await onUploadDocument(file);
         const { data } = await supabase
           .from('employee_documents')
-          .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category)')
+          .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category,is_required)')
           .eq('user_id', employee.id)
           .order('created_at', { ascending: false });
         setComplianceDocs(data || []);
@@ -539,6 +619,24 @@ export function EmployeeDetailSheet({
 
     setIsUploadingDocument(true);
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      let organisationId: string | null = null;
+
+      if (userId) {
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('organisation_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error('Failed to resolve organisation for upload:', profileError);
+        } else {
+          organisationId = profileData?.organisation_id ?? null;
+        }
+      }
+
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const filePath = `employees/${employee.id}/compliance/${documentTypeId}/${Date.now()}-${safeName}`;
 
@@ -553,23 +651,36 @@ export function EmployeeDetailSheet({
         .getPublicUrl(filePath);
       const fileUrl = data.publicUrl;
 
+      const baseInsertPayload = {
+        user_id: employee.id,
+        document_type_id: documentTypeId,
+        file_url: fileUrl,
+        file_name: file.name,
+        issue_date: issueDate || null,
+        expiry_date: expiryDate || null,
+        status: 'pending',
+      };
+
+      const insertPayload = organisationId
+        ? { ...baseInsertPayload, organisation_id: organisationId }
+        : baseInsertPayload;
+
       const { error: insertError } = await supabase
         .from('employee_documents')
-        .insert({
-          user_id: employee.id,
-          document_type_id: documentTypeId,
-          file_url: fileUrl,
-          file_name: file.name,
-          issue_date: issueDate || null,
-          expiry_date: expiryDate || null,
-          status: 'pending',
-        });
+        .insert(insertPayload as any);
 
-      if (insertError) throw insertError;
+      if (insertError && insertError.message?.includes('organisation_id')) {
+        const { error: retryError } = await supabase
+          .from('employee_documents')
+          .insert(baseInsertPayload as any);
+        if (retryError) throw retryError;
+      } else if (insertError) {
+        throw insertError;
+      }
 
       const { data: refreshed } = await supabase
         .from('employee_documents')
-        .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category)')
+        .select('id,document_type_id,status,issue_date,expiry_date,file_url,file_name,created_at,document_type:document_types(name,category,is_required)')
         .eq('user_id', employee.id)
         .order('created_at', { ascending: false });
 
@@ -1204,6 +1315,38 @@ export function EmployeeDetailSheet({
                       </div>
                     )}
                   </div>
+
+                  {optionalComplianceDocs.length > 0 && (
+                    <div className="space-y-2 mt-4">
+                      <p className="text-xs text-muted-foreground font-medium">Additional Compliance Files</p>
+                      <div className="space-y-2">
+                        {optionalComplianceDocs.map((doc) => (
+                          <div key={doc.id} className="flex items-center justify-between text-sm p-3 rounded-lg border bg-muted/30">
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">
+                                {doc.document_type?.name || doc.file_name}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Uploaded {formatDateOrDash(doc.created_at)}
+                              </p>
+                            </div>
+                            {doc.file_url && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(doc.file_url, '_blank', 'noopener,noreferrer');
+                                }}
+                              >
+                                View
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
@@ -1223,6 +1366,7 @@ export function EmployeeDetailSheet({
                     onChange={handleDocumentUpload}
                   />
                 </div>
+
                 <div
                   className={cn(
                     'rounded-lg border-2 border-dashed p-3 transition-colors',
@@ -1339,6 +1483,88 @@ export function EmployeeDetailSheet({
                 </div>
                 </div>
 
+                {/* Emergency Contact */}
+                {employee.emergencyContact && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-sm flex items-center gap-2">
+                        <Phone className="h-4 w-4" />
+                        Emergency Contact
+                      </h3>
+                      <div className="text-sm space-y-1">
+                        <p className="font-medium">{employee.emergencyContact.name}</p>
+                        <p className="text-muted-foreground">{employee.emergencyContact.relationship}</p>
+                        <p>{employee.emergencyContact.phone}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <Separator />
+
+                {/* Contracts */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <FileSignature className="h-4 w-4" />
+                      Contracts
+                    </h3>
+                    {canManageContracts && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCreateContractOpen(true)}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Create Contract
+                      </Button>
+                    )}
+                  </div>
+                  {employeeContracts.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">
+                      No contracts have been created for this employee yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {employeeContracts.map((contract) => (
+                        <div
+                          key={contract.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{contract.title}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Created {formatDateOrDash(contract.created_at)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge className={`text-xs ${contractStatusClasses[contract.status]}`}>
+                              {contractStatusLabels[contract.status]}
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewContract(contract)}
+                            >
+                              View
+                            </Button>
+                            {contract.status === 'pending_signature' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSignContract(contract)}
+                              >
+                                Sign
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Notes */}
                 <Separator />
                 <div className="space-y-3">
@@ -1393,24 +1619,6 @@ export function EmployeeDetailSheet({
                     </div>
                   )}
                 </div>
-
-                {/* Emergency Contact */}
-                {employee.emergencyContact && (
-                  <>
-                    <Separator />
-                    <div className="space-y-3">
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
-                        Emergency Contact
-                      </h3>
-                      <div className="text-sm space-y-1">
-                        <p className="font-medium">{employee.emergencyContact.name}</p>
-                        <p className="text-muted-foreground">{employee.emergencyContact.relationship}</p>
-                        <p>{employee.emergencyContact.phone}</p>
-                      </div>
-                    </div>
-                  </>
-                )}
               </>
             )}
           </div>
@@ -1450,6 +1658,55 @@ export function EmployeeDetailSheet({
         requirementDocumentName={selectedRequirementDoc?.file_name || null}
         requirementDocumentUrl={selectedRequirementDoc?.file_url || null}
         onSaveRequirement={handleRequirementDialogSubmit}
+      />
+
+      <CreateContractDialog
+        open={createContractOpen}
+        onOpenChange={setCreateContractOpen}
+        initialValues={{
+          employee_name: employee ? `${employee.firstName} ${employee.lastName}`.trim() : '',
+          employee_email: employee?.email || '',
+          position: employee?.position || '',
+          department: employee?.department || '',
+          employment_type: employee?.employmentType || 'casual',
+          start_date: employee?.startDate || '',
+          pay_rate: employee?.payRate ? employee.payRate.toFixed(2) : '',
+        }}
+        onCreate={async (contract) => {
+          if (!canManageContracts) {
+            toast({
+              title: 'Access restricted',
+              description: 'You do not have permission to create contracts.',
+              variant: 'destructive',
+            });
+            return;
+          }
+          await createContract(contract);
+        }}
+      />
+
+      <ContractSigningDialog
+        open={signingDialogOpen}
+        onOpenChange={setSigningDialogOpen}
+        contract={selectedContract}
+        onSign={async (contractId, signatureData, signatureType) => {
+          if (!selectedContract) return;
+          await signContract(
+            contractId,
+            signatureData,
+            signatureType,
+            selectedContract.employee_name,
+            selectedContract.employee_email
+          );
+        }}
+      />
+
+      <ContractViewSheet
+        open={viewSheetOpen}
+        onOpenChange={setViewSheetOpen}
+        contract={selectedContract}
+        signature={selectedSignature}
+        auditLogs={selectedAuditLogs}
       />
     </Sheet>
   );

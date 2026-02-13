@@ -1,19 +1,21 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { 
-  Users, 
-  ClipboardCheck, 
-  Target, 
+import {
+  Users,
+  ClipboardCheck,
+  Target,
   Search,
   BarChart3,
-  Star
+  Star,
+  CalendarClock,
 } from 'lucide-react';
 import { MetricCard } from '@/components/ui/metric-card';
 import { SupervisionsTab } from '@/components/performance/SupervisionsTab';
 import { ReviewsTab } from '@/components/performance/ReviewsTab';
 import { CompetenciesTab } from '@/components/performance/CompetenciesTab';
 import { AnalyticsTab } from '@/components/performance/AnalyticsTab';
+import { TimelineTab } from '@/components/performance/TimelineTab';
 import { useSupervisions, usePerformanceReviews, useCompetencies } from '@/hooks/usePerformance';
 
 export default function Performance() {
@@ -81,7 +83,7 @@ export default function Performance() {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search supervisions, reviews, or competencies..."
+            placeholder="Search employees, reviews, or supervisions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -91,10 +93,14 @@ export default function Performance() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
           <TabsTrigger value="analytics" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Analytics</span>
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4" />
+            <span className="hidden sm:inline">Timeline</span>
           </TabsTrigger>
           <TabsTrigger value="supervisions" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -112,6 +118,10 @@ export default function Performance() {
 
         <TabsContent value="analytics">
           <AnalyticsTab />
+        </TabsContent>
+
+        <TabsContent value="timeline">
+          <TimelineTab searchQuery={searchQuery} />
         </TabsContent>
 
         <TabsContent value="supervisions">

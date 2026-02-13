@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FilePlus, Send } from 'lucide-react';
 import {
   Dialog,
@@ -25,6 +25,7 @@ import { contractSchema, type ContractFormData } from '@/lib/validation-schemas'
 interface CreateContractDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialValues?: Partial<ContractFormData>;
   onCreate: (contract: {
     title: string;
     content: string;
@@ -76,10 +77,31 @@ const initialFormData: ContractFormData = {
   content: defaultContractContent,
 };
 
-export function CreateContractDialog({ open, onOpenChange, onCreate }: CreateContractDialogProps) {
+export function CreateContractDialog({
+  open,
+  onOpenChange,
+  onCreate,
+  initialValues,
+}: CreateContractDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<ContractFormData>(initialFormData);
   const [errors, setErrors] = useState<Partial<Record<keyof ContractFormData, string>>>({});
+  useEffect(() => {
+    if (!open) {
+      setFormData(initialFormData);
+      setErrors({});
+      return;
+    }
+
+    if (initialValues) {
+      setFormData({
+        ...initialFormData,
+        ...initialValues,
+        content: initialValues.content || initialFormData.content,
+      });
+      setErrors({});
+    }
+  }, [open, initialValues]);
 
   const validateForm = (): boolean => {
     const result = contractSchema.safeParse(formData);

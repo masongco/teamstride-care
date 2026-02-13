@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -27,6 +26,7 @@ type DistributionStatus = Database['public']['Enums']['distribution_status'];
 
 interface DistributionsTabProps {
   searchQuery: string;
+  employeeFilter: string;
 }
 
 const statusConfig: Record<DistributionStatus, { label: string; icon: React.ElementType; className: string }> = {
@@ -38,7 +38,7 @@ const statusConfig: Record<DistributionStatus, { label: string; icon: React.Elem
   signed: { label: 'Signed', icon: FileSignature, className: 'bg-emerald-100 text-emerald-800' },
 };
 
-export function DistributionsTab({ searchQuery }: DistributionsTabProps) {
+export function DistributionsTab({ searchQuery, employeeFilter }: DistributionsTabProps) {
   const { distributions, loading } = useDocumentDistributions();
   const { documents } = useOrgDocuments();
   
@@ -47,10 +47,13 @@ export function DistributionsTab({ searchQuery }: DistributionsTabProps) {
 
   const filteredDistributions = distributions.filter(dist => {
     const doc = documentMap.get(dist.org_document_id);
+    const matchesEmployee = employeeFilter === 'all' || dist.recipient_email === employeeFilter;
     return (
-      dist.recipient_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dist.recipient_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc?.title.toLowerCase().includes(searchQuery.toLowerCase())
+      matchesEmployee && (
+        dist.recipient_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dist.recipient_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        doc?.title.toLowerCase().includes(searchQuery.toLowerCase())
+      )
     );
   });
 

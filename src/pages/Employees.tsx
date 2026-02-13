@@ -282,6 +282,7 @@ export default function Employees() {
   const [noteDiscussion, setNoteDiscussion] = useState('');
   const [noteOutcome, setNoteOutcome] = useState('');
   const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [notesRefreshKey, setNotesRefreshKey] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -447,11 +448,48 @@ export default function Employees() {
     }
     setNoteSubmitting(true);
     try {
-      // TODO: Persist to the database when an employee interactions table is available.
+      let resolvedOrgId = organisationId || '';
+
+      if (!resolvedOrgId) {
+        const { data, error } = await supabase
+          .from('employees')
+          .select('organisation_id')
+          .eq('id', noteEmployee.id)
+          .maybeSingle();
+
+        if (error || !data?.organisation_id) {
+          toast({
+            title: 'Organisation unavailable',
+            description: 'Unable to resolve organisation for this employee.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        resolvedOrgId = data.organisation_id;
+      }
+
+      const { error } = await supabase
+        .from('employee_interaction_notes')
+        .insert({
+          employee_id: noteEmployee.id,
+          organisation_id: resolvedOrgId,
+          interaction_type: noteType,
+          reason: noteReason.trim(),
+          discussion: noteDiscussion.trim(),
+          outcome: noteOutcome.trim() ? noteOutcome.trim() : null,
+          logged_by_user_id: user.id,
+        });
+
+      if (error) {
+        throw error;
+      }
+
       toast({
         title: 'Note logged',
         description: `Saved ${noteType} note for ${noteEmployee.firstName} ${noteEmployee.lastName}.`,
       });
+      setNotesRefreshKey((prev) => prev + 1);
       setNoteDialogOpen(false);
     } finally {
       setNoteSubmitting(false);
@@ -546,17 +584,20 @@ export default function Employees() {
     const { data } = supabase.storage.from('employee-documents').getPublicUrl(filePath);
     const fileUrl = data.publicUrl;
 
+    const insertPayload = {
+      user_id: employeeId,
+      document_type_id: documentTypeId,
+      file_url: fileUrl,
+      file_name: file.name,
+      status: 'pending',
+      issue_date: issueDate || null,
+      expiry_date: expiryDate || null,
+      organisation_id: organisationId || undefined,
+    } as Record<string, any>;
+
     const { data: inserted, error: insertError } = await supabase
       .from('employee_documents')
-      .insert({
-        user_id: employeeId,
-        document_type_id: documentTypeId,
-        file_url: fileUrl,
-        file_name: file.name,
-        status: 'pending',
-        issue_date: issueDate || null,
-        expiry_date: expiryDate || null,
-      })
+      .insert(insertPayload)
       .select('id')
       .single();
 
@@ -643,15 +684,18 @@ export default function Employees() {
     const { data } = supabase.storage.from('employee-documents').getPublicUrl(filePath);
     const fileUrl = data.publicUrl;
 
+    const insertPayload = {
+      user_id: employee.id,
+      document_type_id: documentTypeId,
+      file_url: fileUrl,
+      file_name: file.name,
+      status: 'pending',
+      organisation_id: organisationId || undefined,
+    } as Record<string, any>;
+
     const { error: insertError } = await supabase
       .from('employee_documents')
-      .insert({
-        user_id: employee.id,
-        document_type_id: documentTypeId,
-        file_url: fileUrl,
-        file_name: file.name,
-        status: 'pending',
-      });
+      .insert(insertPayload);
 
     if (insertError) {
       const message = insertError.message?.includes('row-level security')
@@ -1633,6 +1677,7 @@ export default function Employees() {
         onOpenChange={setDetailSheetOpen}
         onUpdate={handleUpdateEmployee}
         awardClassifications={awardClassifications}
+        notesRefreshKey={notesRefreshKey}
         onSaveCertification={(certification, documentFile, overallStatus) => {
           if (selectedEmployee) {
             return handleSaveCertification(selectedEmployee, certification, documentFile, overallStatus);
